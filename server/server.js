@@ -4,6 +4,7 @@ const cors = require('cors');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -18,7 +19,31 @@ const io = new Server(server, {
 const PORT = 5000;
 
 // Track active transcription processes
-const activeProcesses = new Map(); // socketId -> { pythonProcess, filePath }
+const activeProcesses = new Map(); // socketId -> { pythonProcess, filePath, modelName }
+
+// Helper function to get file hash (same as Python)
+function getFileHash(filePath) {
+  const fileBuffer = fs.readFileSync(filePath);
+  return crypto.createHash('md5').update(fileBuffer).digest('hex').substring(0, 16);
+}
+
+// Helper function to delete checkpoint file
+function deleteCheckpoint(filePath, modelName) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const fileHash = getFileHash(filePath);
+      const checkpointDir = path.join(__dirname, 'checkpoints');
+      const checkpointPath = path.join(checkpointDir, `${fileHash}_${modelName}.json`);
+      
+      if (fs.existsSync(checkpointPath)) {
+        fs.unlinkSync(checkpointPath);
+        console.log(`Deleted checkpoint: ${checkpointPath}`);
+      }
+    }
+  } catch (err) {
+    console.error('Error deleting checkpoint:', err);
+  }
+}
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -38,12 +63,17 @@ io.on('connection', (socket) => {
     const processInfo = activeProcesses.get(socket.id);
     
     if (processInfo) {
-      const { pythonProcess, filePath } = processInfo;
+      const { pythonProcess, filePath, modelName } = processInfo;
       
       // Kill Python process
       if (pythonProcess && !pythonProcess.killed) {
         pythonProcess.kill('SIGTERM');
         console.log(`Killed Python process for socket: ${socket.id}`);
+      }
+      
+      // Delete checkpoint file if it exists
+      if (filePath && modelName) {
+        deleteCheckpoint(filePath, modelName);
       }
       
       // Clean up file
@@ -69,10 +99,15 @@ io.on('connection', (socket) => {
     // Clean up any active processes for this socket
     const processInfo = activeProcesses.get(socket.id);
     if (processInfo) {
-      const { pythonProcess, filePath } = processInfo;
+      const { pythonProcess, filePath, modelName } = processInfo;
       
       if (pythonProcess && !pythonProcess.killed) {
         pythonProcess.kill('SIGTERM');
+      }
+      
+      // Delete checkpoint file if it exists
+      if (filePath && modelName) {
+        deleteCheckpoint(filePath, modelName);
       }
       
       if (filePath && fs.existsSync(filePath)) {
@@ -150,7 +185,7 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
 
     // Track this process
     if (socketId) {
-      activeProcesses.set(socketId, { pythonProcess: python, filePath });
+      activeProcesses.set(socketId, { pythonProcess: python, filePath, modelName: model });
     }
 
     let hasError = false;
@@ -193,6 +228,9 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
       if (socketId) {
         activeProcesses.delete(socketId);
       }
+      
+      // Delete checkpoint file (whether success or failure)
+      deleteCheckpoint(filePath, model);
       
       // Clean up uploaded file
       fs.unlink(filePath, (err) => {
@@ -240,10 +278,10 @@ app.get('/api/health', (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Transcription server running on http://localhost:${PORT}`);
-  console.log(`📝 Upload endpoint: http://localhost:${PORT}/api/transcribe`);
-  console.log(`❤️  Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔌 WebSocket ready for real-time streaming`);
+  console.log(`[>] Transcription server running on http://localhost:${PORT}`);
+  console.log(`[+] Upload endpoint: http://localhost:${PORT}/api/transcribe`);
+  console.log(`[✓] Health check: http://localhost:${PORT}/api/health`);
+  console.log(`[~] WebSocket ready for real-time streaming`);
   
   // Increase server timeouts for long-running transcriptions (2 hours)
   server.timeout = 7200000; // 2 hours

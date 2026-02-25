@@ -2,6 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
 import io from 'socket.io-client';
+import { 
+  ArrowUpTrayIcon, 
+  MusicalNoteIcon, 
+  ExclamationTriangleIcon,
+  PlayIcon,
+  StopIcon,
+  DocumentTextIcon,
+  ClipboardDocumentIcon,
+  ArrowPathIcon,
+  InformationCircleIcon
+} from '@heroicons/react/24/outline';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -22,11 +33,11 @@ function App() {
     socketRef.current = io('http://localhost:5000');
 
     socketRef.current.on('connect', () => {
-      console.log('✅ WebSocket connected:', socketRef.current.id);
+      console.log('[✓] WebSocket connected:', socketRef.current.id);
     });
 
     socketRef.current.on('transcription-update', (data) => {
-      console.log('📥 Received update:', data);
+      console.log('[↓] Received update:', data);
       
       if (data.type === 'status' || data.type === 'info') {
         const msg = data.message || (data.total_chunks ? `Processing ${data.total_chunks} chunks...` : 'Processing...');
@@ -37,7 +48,7 @@ function App() {
         setProgressMessage(`Processing chunk ${data.chunk}/${data.total_chunks}`);
         console.log(`Progress: ${data.percent}% (chunk ${data.chunk}/${data.total_chunks})`);
       } else if (data.type === 'segment') {
-        console.log('📝 New segment:', data.text.substring(0, 100));
+        console.log('[+] New segment:', data.text.substring(0, 100));
         // Add new segment to streaming display
         setStreamingSegments(prev => [...prev, {
           id: data.chunk,
@@ -62,7 +73,7 @@ function App() {
         setTranscription(data.text);
         setLoading(false);
         setProgress(100);
-        setProgressMessage('✅ Complete!');
+        setProgressMessage('[✓] Complete!');
       } else if (data.type === 'error') {
         setError(data.error || data.message);
         setLoading(false);
@@ -71,11 +82,11 @@ function App() {
     });
 
     socketRef.current.on('disconnect', () => {
-      console.log('❌ WebSocket disconnected');
+      console.log('[✗] WebSocket disconnected');
       
       // Auto-reconnect and resume if we were processing
       if (loading) {
-        console.log('⚠️ Connection lost during processing, attempting to resume...');
+        console.log('[!] Connection lost during processing, attempting to resume...');
         setProgressMessage('Connection lost, reconnecting...');
         
         setTimeout(() => {
@@ -85,12 +96,12 @@ function App() {
     });
 
     socketRef.current.on('reconnect', () => {
-      console.log('✅ Reconnected! Resuming transcription...');
+      console.log('[✓] Reconnected! Resuming transcription...');
       setProgressMessage('Reconnected, resuming from checkpoint...');
     });
 
     socketRef.current.on('transcription-cancelled', (data) => {
-      console.log('⚠️ Transcription cancelled');
+      console.log('[!] Transcription cancelled');
       setLoading(false);
       setError(data.message || 'Transcription cancelled by user');
       setProgress(0);
@@ -102,6 +113,7 @@ function App() {
         socketRef.current.disconnect();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCancelTranscription = () => {
@@ -199,7 +211,7 @@ function App() {
       
       // Check if it's a timeout error
       if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
-        console.log('⏱️ Timeout detected, progress saved. You can re-upload the same file to resume.');
+        console.log('[⏱] Timeout detected, progress saved. You can re-upload the same file to resume.');
         setError('Processing timeout - Progress saved! Re-upload the same file to resume from checkpoint.');
         setProgressMessage('Timeout - progress saved in checkpoint');
       } else {
@@ -244,10 +256,10 @@ function App() {
     <div className="App">
       <div className="container">
         <div className="header">
-          <h1>🎵 Audio Transcriber</h1>
+          <h1><MusicalNoteIcon className="title-icon" /> Audio Transcriber</h1>
           <div className="badges">
-            <span className="badge badge-hebrew">🇮🇱 Hebrew</span>
-            <span className="badge badge-gpu">🚀 GPU</span>
+            <span className="badge badge-hebrew">Hebrew</span>
+            <span className="badge badge-gpu">GPU</span>
           </div>
         </div>
 
@@ -287,13 +299,13 @@ function App() {
           
           {!file ? (
             <>
-              <div className="upload-icon">📁</div>
+              <div className="upload-icon"><ArrowUpTrayIcon /></div>
               <p className="dropzone-text">Drag & Drop M4A file</p>
               <p className="dropzone-subtext">or click to browse</p>
             </>
           ) : (
             <>
-              <div className="file-icon">🎵</div>
+              <div className="file-icon"><MusicalNoteIcon /></div>
               <p className="file-name">{file.name}</p>
               <p className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
               <button className="clear-btn" onClick={(e) => { e.stopPropagation(); handleClearFile(); }}>
@@ -305,7 +317,7 @@ function App() {
 
         {error && (
           <div className="error-message">
-            ⚠️ {error}
+            <ExclamationTriangleIcon className="error-icon" /> {error}
           </div>
         )}
 
@@ -316,14 +328,14 @@ function App() {
                 className="transcribe-btn"
                 onClick={handleTranscribe}
               >
-                🎤 Start Transcription
+                <PlayIcon className="btn-icon" /> Start Transcription
               </button>
             ) : (
               <button
                 className="stop-btn"
                 onClick={handleCancelTranscription}
               >
-                ⏹️ Stop Transcription
+                <StopIcon className="btn-icon" /> Stop Transcription
               </button>
             )}
             
@@ -344,7 +356,7 @@ function App() {
         {streamingSegments.length > 0 && (
           <div className="streaming-box" ref={transcriptionBoxRef}>
             <div className="streaming-header">
-              <h3>🔴 Live Transcription</h3>
+              <h3><span className="live-dot">●</span> Live Transcription</h3>
               <span className="live-badge">LIVE</span>
             </div>
             <div className="streaming-content">
@@ -364,23 +376,23 @@ function App() {
         {transcription && (
           <div className="transcription-result">
             <div className="result-header">
-              <h2>📝 Transcription</h2>
+              <h2><DocumentTextIcon className="header-icon" /> Transcription</h2>
               <button className="copy-btn" onClick={copyToClipboard}>
-                📋 Copy
+                <ClipboardDocumentIcon className="btn-icon" /> Copy
               </button>
             </div>
             <div className="transcription-text">
               {transcription}
             </div>
             <button className="new-transcription-btn" onClick={handleClearFile}>
-              🔄 Transcribe Another File
+              <ArrowPathIcon className="btn-icon" /> Transcribe Another File
             </button>
           </div>
         )}
 
         {!file && !transcription && (
           <div className="info-footer">
-            <p>💡 Private & Free • No API Keys • Runs Locally</p>
+            <p><InformationCircleIcon className="info-icon" /> Private & Free • No API Keys • Runs Locally</p>
           </div>
         )}
       </div>

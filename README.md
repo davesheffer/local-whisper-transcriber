@@ -1,4 +1,4 @@
-# 🎵 Audio Transcriber (Local Whisper)
+# Local-Whisper-Transcriber
 
 A React application for transcribing M4A audio files using OpenAI's Whisper model **running locally on your machine**. No API keys needed, completely private!
 
