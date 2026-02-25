@@ -46,6 +46,7 @@ npm test -- --coverage
 
 ### File Upload
 - ✓ POST /api/transcribe - File upload validation
+- ⊘ POST /api/transcribe - Full transcription (skipped - requires real audio file)
 - ✓ Model parameter handling
 
 ### WebSocket
@@ -88,9 +89,11 @@ The test suite covers:
 
 2. **Port configuration**: Tests expect server on port 5000. Modify `SERVER_URL` in test file if different.
 
-3. **Test audio files**: Tests create temporary mock audio files that are automatically cleaned up.
+3. **Skipped tests**: One test is skipped (full file transcription) as it requires a real audio file and would timeout with mock data. This is expected behavior.
 
-4. **Timeouts**: Some tests have extended timeouts (10-35s) to account for file operations.
+4. **Test audio files**: Tests create temporary mock audio files that are automatically cleaned up.
+
+5. **Timeouts**: Some tests have extended timeouts (10-15s) to account for connection operations.
 
 ## CI/CD Integration
 
