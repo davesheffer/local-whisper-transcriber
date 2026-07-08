@@ -1,0 +1,110 @@
+{
+  "id": "dec_18144c4fd0",
+  "title": "Integrate Hunch engineering memory system with IDE hooks for decision tracking",
+  "topic": null,
+  "status": "proposed",
+  "context": "Engineering decisions, constraints, and bug root causes are often lost over time, leading to recurring bugs and drift between code intent and implementation. Manual documentation is unreliable and not queryable.",
+  "decision": "Adopt Hunch as a persistent decision graph, integrated via MCP servers and IDE hooks (SessionStart, PreToolUse, PostToolUse, UserPromptSubmit). Provide CLI commands for capturing decisions, healing doc/code drift, analyzing fragility, and grounding bug fixes in past context.",
+  "consequences": [
+    "All IDE sessions automatically invoke Hunch hooks for decision capture and query",
+    "Decisions persist in a queryable graph, preventing drift and informing future work",
+    "Bug fixes can reference past root causes and constraints via Hunch commands",
+    "Code understanding is grounded in documented rationale rather than inference",
+    "Fragility analysis and dependency discovery become queryable from the graph",
+    "Adds runtime overhead from hook invocations on every tool use and session start"
+  ],
+  "alternatives_rejected": [
+    "Markdown/wiki-based decision documentation (prone to drift, not queryable, separated from code)",
+    "Manual record-keeping in code comments (unreliable, not structured, easily lost)",
+    "No persistent memory system (decisions forgotten, root causes rediscovered, bugs recur)"
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Markdown/wiki-based decision documentation (prone to drift, not queryable, separated from code)",
+      "scope": [
+        "server/**",
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    },
+    {
+      "alternative": "Manual record-keeping in code comments (unreliable, not structured, easily lost)",
+      "scope": [
+        "server/**",
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    },
+    {
+      "alternative": "No persistent memory system (decisions forgotten, root causes rediscovered, bugs recur)",
+      "scope": [
+        "server/**",
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_3de4f901ff",
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "server/server.js",
+    "server/server.test.js",
+    "src/App.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "3d9c1cd",
+  "valid_from": "2026-07-08T16:17:42+03:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [
+      "getFileHash",
+      "deleteCheckpoint"
+    ],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:3d9c1cd",
+      "synth:provider=claude-cli",
+      "branch:main",
+      "server/server.js",
+      "server/server.test.js",
+      "src/App.js"
+    ],
+    "last_verified": "2026-07-08T13:18:15.413Z"
+  },
+  "date": "2026-07-08T16:17:42+03:00"
+}
