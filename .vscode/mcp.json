@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "hunch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@davesheffer/hunch",
+        "mcp"
+      ]
+    }
+  }
+}

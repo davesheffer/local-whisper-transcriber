@@ -1,0 +1,152 @@
+[
+  {
+    "id": "edge_16d6017f7a",
+    "from": "sym_e7eb8c6482",
+    "to": "sym_6b548a6b71",
+    "type": "calls",
+    "reason": "handleWorkerMessage calls finishJob",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_18b4dd2c5f",
+    "from": "sym_9accd5cebb",
+    "to": "sym_8498857590",
+    "type": "calls",
+    "reason": "touchWorker calls evictIfNeeded",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_1d64a5da2b",
+    "from": "sym_ae61033130",
+    "to": "sym_e7eb8c6482",
+    "type": "calls",
+    "reason": "createWorker calls handleWorkerMessage",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_21bcc5739d",
+    "from": "sym_31efdb79bd",
+    "to": "sym_b88d997157",
+    "type": "calls",
+    "reason": "cancelJobsForClient calls sendToWorker",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_33d76c8ce0",
+    "from": "sym_e7eb8c6482",
+    "to": "sym_490bec1cf2",
+    "type": "calls",
+    "reason": "handleWorkerMessage calls emitToClient",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_a02451567b",
+    "from": "sym_ae61033130",
+    "to": "sym_490bec1cf2",
+    "type": "calls",
+    "reason": "createWorker calls emitToClient",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_a61bd4759b",
+    "from": "sym_ae61033130",
+    "to": "sym_6b548a6b71",
+    "type": "calls",
+    "reason": "createWorker calls finishJob",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_ad585b582d",
+    "from": "sym_04f549bf86",
+    "to": "sym_ae61033130",
+    "type": "calls",
+    "reason": "getWorker calls createWorker",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_d87f9fd15c",
+    "from": "sym_50e5d43f52",
+    "to": "sym_b88d997157",
+    "type": "calls",
+    "reason": "shutdown calls sendToWorker",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  },
+  {
+    "id": "edge_ed3ac96bbe",
+    "from": "sym_8498857590",
+    "to": "sym_b88d997157",
+    "type": "calls",
+    "reason": "evictIfNeeded calls sendToWorker",
+    "strength": 0.8,
+    "provenance": {
+      "source": "extracted",
+      "confidence": 0.8,
+      "evidence": [
+        "server/server.js"
+      ]
+    }
+  }
+]

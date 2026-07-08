@@ -1,0 +1,21 @@
+{
+  "id": "cmp_3de4f901ff",
+  "kind": "module",
+  "name": "Server",
+  "responsibility": "",
+  "paths": [
+    "server/**"
+  ],
+  "status": "active",
+  "owners": [],
+  "fragility": 0,
+  "provenance": {
+    "source": "inferred",
+    "confidence": 0.5,
+    "evidence": [
+      "server"
+    ]
+  },
+  "created_at": "2026-07-08T13:05:33.118Z",
+  "updated_at": "2026-07-08T13:05:33.118Z"
+}

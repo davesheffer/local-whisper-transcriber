@@ -26,7 +26,16 @@ cd server
 pip install -r requirements.txt
 ```
 
-This will install OpenAI Whisper and its dependencies. First run may take a few minutes.
+This installs **faster-whisper** (CTranslate2-based, 4–12× faster than the
+reference `openai-whisper` package with the same accuracy).
+
+#### GPU acceleration (recommended)
+
+faster-whisper uses CTranslate2, which needs CUDA libraries on Windows.
+If you have an NVIDIA GPU and want maximum speed, install a CUDA-enabled
+PyTorch build (used here only for GPU detection) and make sure `cuBLAS` /
+`cuDNN` DLLs are on `PATH`. CPU-only also works (`int8` quantization is used
+automatically and is reasonably fast).
 
 ### 2. Install Node.js Dependencies
 
@@ -67,6 +76,33 @@ The app will open at `http://localhost:3000`
 3. Click "Transcribe Audio" button
 4. Wait for the transcription to complete (first run downloads the model)
 5. Copy or save the transcribed text
+
+## Performance optimizations
+
+This build is tuned for speed:
+
+- **faster-whisper / CTranslate2** instead of the reference `openai-whisper`
+  (typical 4–12× speedup, same accuracy).
+- **Persistent Python worker** per model — the model loads **once** when the
+  server starts (or on first use), so every subsequent transcription starts
+  instantly instead of paying the model-load cost again.
+- **VAD filter** automatically skips silence (big win on real recordings).
+- **Greedy decoding** (`beam_size=1`, `condition_on_previous_text=False`).
+- **`float16` on GPU**, **`int8` on CPU** (quantized, multi-threaded).
+- **Native streaming**: segments are emitted to the UI as soon as the model
+  produces them, with no per-chunk WAV export.
+
+### Tuning
+
+Environment variables read by the server:
+
+| Variable           | Default | Meaning                                            |
+|--------------------|---------|----------------------------------------------------|
+| `WHISPER_PRELOAD`  | `base`  | Model warmed up on server start (`tiny`/`base`/`small`/`medium`/`large-v3`) |
+| `PYTHON_BIN`       | `python`| Python executable used to spawn the worker         |
+
+If you mostly use `small`, start the server with `WHISPER_PRELOAD=small` and the
+first transcription will start immediately.
 
 ## Whisper Models
 

@@ -1,0 +1,358 @@
+[
+  {
+    "id": "sym_04f549bf86",
+    "file": "server/server.js",
+    "name": "getWorker",
+    "kind": "function",
+    "signature_hash": "sha1:95f260d8844",
+    "calls": [
+      "sym_ae61033130"
+    ],
+    "called_by": [],
+    "metrics": {
+      "loc": 5,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 1
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_31efdb79bd",
+    "file": "server/server.js",
+    "name": "cancelJobsForClient",
+    "kind": "function",
+    "signature_hash": "sha1:46d7bbd9b64",
+    "calls": [
+      "sym_b88d997157"
+    ],
+    "called_by": [],
+    "metrics": {
+      "loc": 8,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 1
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_381c044ca1",
+    "file": "src/App.js",
+    "name": "handleClearFile",
+    "kind": "function",
+    "signature_hash": "sha1:cf55ed32487",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 11,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_3eddc03bf8",
+    "file": "server/server.test.js",
+    "name": "checkComplete",
+    "kind": "function",
+    "signature_hash": "sha1:1545f89b419",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 10,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:4974b5b"
+  },
+  {
+    "id": "sym_490bec1cf2",
+    "file": "server/server.js",
+    "name": "emitToClient",
+    "kind": "function",
+    "signature_hash": "sha1:da94c000a17",
+    "calls": [],
+    "called_by": [
+      "sym_ae61033130",
+      "sym_e7eb8c6482"
+    ],
+    "metrics": {
+      "loc": 3,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 2,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_50e5d43f52",
+    "file": "server/server.js",
+    "name": "shutdown",
+    "kind": "function",
+    "signature_hash": "sha1:9ca0d029578",
+    "calls": [
+      "sym_b88d997157"
+    ],
+    "called_by": [],
+    "metrics": {
+      "loc": 8,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 1
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_6030efc496",
+    "file": "src/App.js",
+    "name": "handleDrop",
+    "kind": "function",
+    "signature_hash": "sha1:e37140e4261",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 13,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_6b548a6b71",
+    "file": "server/server.js",
+    "name": "finishJob",
+    "kind": "function",
+    "signature_hash": "sha1:a074edafef5",
+    "calls": [],
+    "called_by": [
+      "sym_ae61033130",
+      "sym_e7eb8c6482"
+    ],
+    "metrics": {
+      "loc": 12,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 2,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_737f5f414c",
+    "file": "src/App.js",
+    "name": "handleTranscribe",
+    "kind": "function",
+    "signature_hash": "sha1:684ebfaf3d4",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 68,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_7a43cb152d",
+    "file": "src/App.js",
+    "name": "copyToClipboard",
+    "kind": "function",
+    "signature_hash": "sha1:daa7a21bc36",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 3,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_8498857590",
+    "file": "server/server.js",
+    "name": "evictIfNeeded",
+    "kind": "function",
+    "signature_hash": "sha1:0f850ecec05",
+    "calls": [
+      "sym_b88d997157"
+    ],
+    "called_by": [
+      "sym_9accd5cebb"
+    ],
+    "metrics": {
+      "loc": 20,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 1,
+      "fan_out": 1
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_84dc5edc61",
+    "file": "src/App.js",
+    "name": "handleFileInput",
+    "kind": "function",
+    "signature_hash": "sha1:da440d65793",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 8,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_919ca2f117",
+    "file": "src/App.js",
+    "name": "handleDragLeave",
+    "kind": "function",
+    "signature_hash": "sha1:8a68ed2b046",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 4,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_9accd5cebb",
+    "file": "server/server.js",
+    "name": "touchWorker",
+    "kind": "function",
+    "signature_hash": "sha1:08f2735f1dd",
+    "calls": [
+      "sym_8498857590"
+    ],
+    "called_by": [],
+    "metrics": {
+      "loc": 6,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 1
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_a5a3b44428",
+    "file": "src/App.js",
+    "name": "handleCancelTranscription",
+    "kind": "function",
+    "signature_hash": "sha1:c539447f419",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 9,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_ae61033130",
+    "file": "server/server.js",
+    "name": "createWorker",
+    "kind": "function",
+    "signature_hash": "sha1:156b1bb4d8a",
+    "calls": [
+      "sym_e7eb8c6482",
+      "sym_490bec1cf2",
+      "sym_6b548a6b71"
+    ],
+    "called_by": [
+      "sym_04f549bf86"
+    ],
+    "metrics": {
+      "loc": 55,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 1,
+      "fan_out": 3
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_b88d997157",
+    "file": "server/server.js",
+    "name": "sendToWorker",
+    "kind": "function",
+    "signature_hash": "sha1:be7ba24ecb5",
+    "calls": [],
+    "called_by": [
+      "sym_8498857590",
+      "sym_31efdb79bd",
+      "sym_50e5d43f52"
+    ],
+    "metrics": {
+      "loc": 3,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 3,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_c6b080222e",
+    "file": "src/App.js",
+    "name": "handleDragOver",
+    "kind": "function",
+    "signature_hash": "sha1:71ed515d7ae",
+    "calls": [],
+    "called_by": [],
+    "metrics": {
+      "loc": 4,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 0,
+      "fan_out": 0
+    },
+    "last_changed": "commit:02486dd"
+  },
+  {
+    "id": "sym_e7eb8c6482",
+    "file": "server/server.js",
+    "name": "handleWorkerMessage",
+    "kind": "function",
+    "signature_hash": "sha1:7ddf664e37d",
+    "calls": [
+      "sym_490bec1cf2",
+      "sym_6b548a6b71"
+    ],
+    "called_by": [
+      "sym_ae61033130"
+    ],
+    "metrics": {
+      "loc": 38,
+      "churn_90d": 0,
+      "bug_count": 0,
+      "fan_in": 1,
+      "fan_out": 2
+    },
+    "last_changed": "commit:02486dd"
+  }
+]

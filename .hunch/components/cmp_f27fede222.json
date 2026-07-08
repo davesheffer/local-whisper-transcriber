@@ -1,0 +1,21 @@
+{
+  "id": "cmp_f27fede222",
+  "kind": "module",
+  "name": "Src",
+  "responsibility": "",
+  "paths": [
+    "src/**"
+  ],
+  "status": "active",
+  "owners": [],
+  "fragility": 0,
+  "provenance": {
+    "source": "inferred",
+    "confidence": 0.5,
+    "evidence": [
+      "src"
+    ]
+  },
+  "created_at": "2026-07-08T13:05:33.118Z",
+  "updated_at": "2026-07-08T13:05:33.118Z"
+}

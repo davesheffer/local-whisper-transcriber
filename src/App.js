@@ -27,6 +27,13 @@ function App() {
   const fileInputRef = useRef(null);
   const socketRef = useRef(null);
   const transcriptionBoxRef = useRef(null);
+  // Stable per-tab id. Unlike socket.id it survives reconnects, so the server
+  // can keep routing live updates to us after a dropped-and-restored socket.
+  const clientIdRef = useRef(
+    (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -34,6 +41,9 @@ function App() {
 
     socketRef.current.on('connect', () => {
       console.log('[✓] WebSocket connected:', socketRef.current.id);
+      // Re-register our stable clientId on every (re)connect so the server
+      // re-joins us to our room and live updates resume after a blip.
+      socketRef.current.emit('register', clientIdRef.current);
     });
 
     socketRef.current.on('transcription-update', (data) => {
@@ -45,8 +55,11 @@ function App() {
         console.log('Status:', msg);
       } else if (data.type === 'progress') {
         setProgress(data.percent);
-        setProgressMessage(`Processing chunk ${data.chunk}/${data.total_chunks}`);
-        console.log(`Progress: ${data.percent}% (chunk ${data.chunk}/${data.total_chunks})`);
+        const label = data.total_chunks && data.total_chunks > 0
+          ? `Processing chunk ${data.chunk}/${data.total_chunks}`
+          : `Transcribing... ${data.percent}%`;
+        setProgressMessage(label);
+        console.log(`Progress: ${data.percent}%`);
       } else if (data.type === 'segment') {
         console.log('[+] New segment:', data.text.substring(0, 100));
         // Add new segment to streaming display
@@ -81,23 +94,12 @@ function App() {
       }
     });
 
-    socketRef.current.on('disconnect', () => {
-      console.log('[✗] WebSocket disconnected');
-      
-      // Auto-reconnect and resume if we were processing
-      if (loading) {
-        console.log('[!] Connection lost during processing, attempting to resume...');
-        setProgressMessage('Connection lost, reconnecting...');
-        
-        setTimeout(() => {
-          socketRef.current.connect();
-        }, 2000);
-      }
-    });
-
-    socketRef.current.on('reconnect', () => {
-      console.log('[✓] Reconnected! Resuming transcription...');
-      setProgressMessage('Reconnected, resuming from checkpoint...');
+    socketRef.current.on('disconnect', (reason) => {
+      // A dropped progress socket no longer cancels the job — the server keeps
+      // transcribing and delivers the result over the HTTP response. socket.io
+      // auto-reconnects, and our 'connect' handler re-registers to resume the
+      // live segment stream, so there's nothing to do here but log.
+      console.log('[✗] WebSocket disconnected:', reason, '— job keeps running, auto-reconnecting');
     });
 
     socketRef.current.on('transcription-cancelled', (data) => {
@@ -126,6 +128,29 @@ function App() {
     }
   };
 
+  // Pre-load the chosen model so the first transcription starts instantly.
+  // Debounced so rapid clicks through the model selector don't kick off
+  // multiple heavy loads on the server.
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      axios.post(
+        'http://localhost:5000/api/warmup',
+        { model: selectedModel },
+        { signal: controller.signal, timeout: 600000 }
+      ).then(() => {
+        console.log(`[✓] Model "${selectedModel}" warmed`);
+      }).catch((err) => {
+        if (axios.isCancel(err) || err.code === 'ERR_CANCELED') return;
+        console.warn('Warmup failed (will load on first use):', err.message);
+      });
+    }, 600);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [selectedModel]);
+
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -141,12 +166,14 @@ function App() {
     setIsDragging(false);
     
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.type === 'audio/m4a' || droppedFile.type === 'audio/mp4' || droppedFile.name.endsWith('.m4a'))) {
+    const name = droppedFile?.name.toLowerCase() || '';
+    const okType = ['audio/m4a', 'audio/x-m4a', 'audio/mp4', 'video/mp4'].includes(droppedFile?.type);
+    if (droppedFile && (okType || name.endsWith('.m4a') || name.endsWith('.mp4'))) {
       setFile(droppedFile);
       setError('');
       setTranscription('');
     } else {
-      setError('Please drop a valid M4A audio file');
+      setError('Please drop a valid M4A or MP4 file');
     }
   };
 
@@ -176,7 +203,7 @@ function App() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('model', selectedModel);
-      formData.append('socketId', socketRef.current?.id);
+      formData.append('clientId', clientIdRef.current);
 
       setProgressMessage('Uploading file...');
 
@@ -245,7 +272,8 @@ function App() {
     { value: 'base', label: 'Base', desc: 'Balanced (~3-8 min)', size: '74M' },
     { value: 'small', label: 'Small', desc: 'Better (~5-12 min)', size: '244M' },
     { value: 'medium', label: 'Medium', desc: 'High (~10-20 min)', size: '769M' },
-    { value: 'large', label: 'Large', desc: 'Best (~20-40 min)', size: '1550M' },
+    { value: 'large-v3-turbo', label: 'Turbo', desc: 'Fast + best (~5-10 min)', size: '809M' },
+    { value: 'large-v3', label: 'Large', desc: 'Best (~20-40 min)', size: '1550M' },
   ];
 
   const copyToClipboard = () => {
@@ -293,14 +321,14 @@ function App() {
             type="file"
             ref={fileInputRef}
             onChange={handleFileInput}
-            accept=".m4a,audio/m4a,audio/mp4"
+            accept=".m4a,.mp4,audio/m4a,audio/x-m4a,audio/mp4,video/mp4"
             style={{ display: 'none' }}
           />
           
           {!file ? (
             <>
               <div className="upload-icon"><ArrowUpTrayIcon /></div>
-              <p className="dropzone-text">Drag & Drop M4A file</p>
+              <p className="dropzone-text">Drag & Drop M4A or MP4 file</p>
               <p className="dropzone-subtext">or click to browse</p>
             </>
           ) : (

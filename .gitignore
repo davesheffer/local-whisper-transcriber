@@ -20,3 +20,12 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# >>> hunch (derived runtime index — regenerable from .hunch/*.json) >>>
+.hunch/*.sqlite
+.hunch/*.sqlite-shm
+.hunch/*.sqlite-wal
+.hunch/*.sqlite-journal
+.hunch/**/*.tmp*
+.hunch/local.json
+.hunch-private/
+# <<< hunch <<<

@@ -25,18 +25,27 @@ describe('Local Whisper Transcriber Server Tests', () => {
     test('GET / - should return HTML welcome page', async () => {
       const response = await request(SERVER_URL).get('/');
       expect(response.status).toBe(200);
-      expect(response.text).toContain('Audio Transcription Server');
-      expect(response.text).toContain('Local Whisper');
+      expect(response.text).toContain('Local Whisper Transcriber');
       expect(response.headers['content-type']).toMatch(/html/);
     });
 
-    test('GET /api/health - should return health check', async () => {
+    test('GET /api/health - should return health check with workers map', async () => {
       const response = await request(SERVER_URL).get('/api/health');
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('status', 'ok');
-      expect(response.body).toHaveProperty('message');
-      expect(response.body.message).toContain('running');
+      expect(response.body).toHaveProperty('workers');
+      expect(typeof response.body.workers).toBe('object');
     });
+
+    test('POST /api/warmup - should preload a model', async () => {
+      const response = await request(SERVER_URL)
+        .post('/api/warmup')
+        .send({ model: 'tiny' })
+        .timeout(600000);
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('ok', true);
+      expect(response.body).toHaveProperty('model', 'tiny');
+    }, 600000);
 
   });
 
@@ -148,35 +157,15 @@ describe('Local Whisper Transcriber Server Tests', () => {
   });
 
   describe('File System Structure', () => {
-    
-    test('uploads directory should exist', () => {
-      const uploadsDir = path.join(__dirname, 'uploads');
-      expect(fs.existsSync(uploadsDir)).toBe(true);
-      console.log('✓ Uploads directory exists');
-    });
 
-    test('checkpoints directory should exist', () => {
-      const checkpointsDir = path.join(__dirname, 'checkpoints');
-      expect(fs.existsSync(checkpointsDir)).toBe(true);
-      console.log('✓ Checkpoints directory exists');
-    });
-
-    test('whisper_stream.py should exist', () => {
-      const scriptPath = path.join(__dirname, 'whisper_stream.py');
+    test('whisper_worker.py should exist', () => {
+      const scriptPath = path.join(__dirname, 'whisper_worker.py');
       expect(fs.existsSync(scriptPath)).toBe(true);
-      console.log('✓ Python streaming script exists');
-    });
-
-    test('whisper_transcribe.py should exist', () => {
-      const scriptPath = path.join(__dirname, 'whisper_transcribe.py');
-      expect(fs.existsSync(scriptPath)).toBe(true);
-      console.log('✓ Python transcribe script exists');
     });
 
     test('requirements.txt should exist', () => {
       const reqPath = path.join(__dirname, 'requirements.txt');
       expect(fs.existsSync(reqPath)).toBe(true);
-      console.log('✓ Python requirements file exists');
     });
 
   });
@@ -218,33 +207,6 @@ describe('Local Whisper Transcriber Server Tests', () => {
       
       expect(response.status).toBe(404);
       console.log('✓ Wrong POST endpoint returns 404');
-    });
-
-  });
-
-  describe('Checkpoint System', () => {
-    
-    test('checkpoints directory should be writable', () => {
-      const checkpointsDir = path.join(__dirname, 'checkpoints');
-      const testFile = path.join(checkpointsDir, 'test.json');
-      
-      try {
-        fs.writeFileSync(testFile, JSON.stringify({ test: true }));
-        expect(fs.existsSync(testFile)).toBe(true);
-        fs.unlinkSync(testFile);
-        console.log('✓ Checkpoints directory is writable');
-      } catch (error) {
-        throw new Error('Checkpoints directory is not writable: ' + error.message);
-      }
-    });
-
-    test('should ignore checkpoint JSON files (.gitignore)', () => {
-      const gitignorePath = path.join(__dirname, '.gitignore');
-      if (fs.existsSync(gitignorePath)) {
-        const content = fs.readFileSync(gitignorePath, 'utf-8');
-        expect(content).toContain('checkpoints/');
-        console.log('✓ Checkpoints properly ignored in git');
-      }
     });
 
   });

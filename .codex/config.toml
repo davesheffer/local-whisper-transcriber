@@ -1,0 +1,5 @@
+# >>> hunch mcp (managed) >>>
+[mcp_servers.hunch]
+command = 'npx'
+args = ['-y', '@davesheffer/hunch', 'mcp']
+# <<< hunch mcp <<<
