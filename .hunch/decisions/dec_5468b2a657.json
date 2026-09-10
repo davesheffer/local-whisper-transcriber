@@ -1,0 +1,48 @@
+{
+  "id": "dec_5468b2a657",
+  "title": "fix: enable CUDA transcription without GPU-enabled PyTorch",
+  "topic": null,
+  "status": "accepted",
+  "context": "What changed: added DeviceSelectionTests, setUp, test_auto_uses_ctranslate_cuda_without_pytorch, test_missing_cuda_library_falls_back_before_ready, test_explicit_cuda_does_not_silently_fall_back, test_explicit_cpu_skips_gpu_and_honors_threads, test_cancelled_queued_job_never_runs_inference, configure_cuda_libraries; new dep(s): os, unittest, unittest.mock, whisper_worker, faster_whisper.feature_extractor, pathlib; dropped dep(s): torch; 1 new file(s).",
+  "decision": "Changed server/server.js, server/test_whisper_worker.py, server/whisper_worker.py: added DeviceSelectionTests, setUp, test_auto_uses_ctranslate_cuda_without_pytorch, test_missing_cuda_library_falls_back_before_ready, test_explicit_cuda_does_not_silently_fall_back, test_explicit_cpu_skips_gpu_and_honors_threads, test_cancelled_queued_job_never_runs_inference, configure_cuda_libraries; new dep(s): os, unittest, unittest.mock, whisper_worker, faster_whisper.feature_extractor, pathlib; dropped dep(s): torch; 1 new file(s).",
+  "consequences": [
+    "Adds dependency: os, unittest, unittest.mock, whisper_worker, faster_whisper.feature_extractor, pathlib, time, ctranslate2, numpy.",
+    "Drops dependency: torch."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_3de4f901ff"
+  ],
+  "related_files": [
+    "server/server.js",
+    "server/test_whisper_worker.py",
+    "server/whisper_worker.py"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "125c82c",
+  "valid_from": "2026-09-10T12:37:38+03:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": [
+      "torch"
+    ]
+  },
+  "provenance": {
+    "source": "inferred",
+    "confidence": 0.45,
+    "evidence": [
+      "commit:125c82c",
+      "synth:provider=deterministic",
+      "branch:main",
+      "server/server.js",
+      "server/test_whisper_worker.py",
+      "server/whisper_worker.py"
+    ],
+    "last_verified": "2026-09-10T09:37:40.250Z"
+  },
+  "date": "2026-09-10T12:37:38+03:00"
+}
