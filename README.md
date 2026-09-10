@@ -31,11 +31,22 @@ reference `openai-whisper` package with the same accuracy).
 
 #### GPU acceleration (recommended)
 
-faster-whisper uses CTranslate2, which needs CUDA libraries on Windows.
-If you have an NVIDIA GPU and want maximum speed, install a CUDA-enabled
-PyTorch build (used here only for GPU detection) and make sure `cuBLAS` /
-`cuDNN` DLLs are on `PATH`. CPU-only also works (`int8` quantization is used
-automatically and is reasonably fast).
+faster-whisper uses CTranslate2, which detects NVIDIA GPUs directly. A
+CUDA-enabled PyTorch installation is **not required**. Install the optional
+CUDA 12/cuDNN 9 libraries with the same Python used by the server:
+
+```bash
+python -m pip install -r server/requirements-gpu.txt
+```
+
+On Windows the worker discovers these NVIDIA packages automatically. On Linux,
+add their library directories to `LD_LIBRARY_PATH` before starting Python (see
+[faster-whisper GPU setup](https://github.com/SYSTRAN/faster-whisper#gpu)).
+The worker checks the CUDA encoder before announcing readiness. In automatic
+mode, an initialization failure is logged and falls back to CPU. Set
+`WHISPER_DEVICE=cuda` to require GPU execution and report an error if it fails.
+`GET http://localhost:5000/api/health` reports the actual device and compute type
+for each ready model.
 
 ### 2. Install Node.js Dependencies
 
@@ -100,6 +111,16 @@ Environment variables read by the server:
 |--------------------|---------|----------------------------------------------------|
 | `WHISPER_PRELOAD`  | `base`  | Model warmed up on server start (`tiny`/`base`/`small`/`medium`/`large-v3`) |
 | `PYTHON_BIN`       | `python`| Python executable used to spawn the worker         |
+| `WHISPER_DEVICE` | `auto` | Detect CUDA with CTranslate2; override with `cpu` or `cuda` |
+| `WHISPER_COMPUTE_TYPE` | device dependent | `int8_float16` on CUDA, `int8` on CPU |
+| `WHISPER_CPU_THREADS` | logical CPU count | CPU inference threads |
+| `WHISPER_BATCH_SIZE` | `8` | Number of audio chunks processed per batch; reduce if GPU memory is limited |
+| `WHISPER_BATCHED` | `1` | Set to `0` to use sequential inference |
+
+Completed transcriptions return `metrics` with elapsed time, audio duration,
+time to first text segment, and real-time factor (elapsed / audio duration).
+Elapsed time includes audio decoding and inference, but excludes model loading
+and time spent waiting in the worker queue. The same metrics appear in worker logs.
 
 If you mostly use `small`, start the server with `WHISPER_PRELOAD=small` and the
 first transcription will start immediately.

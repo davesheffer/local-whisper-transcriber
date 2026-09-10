@@ -1,0 +1,4 @@
+# Optional CUDA 12 libraries (Windows/Linux). No CUDA-enabled PyTorch required.
+-r requirements.txt
+nvidia-cublas-cu12>=12.8,<13
+nvidia-cudnn-cu12>=9,<10

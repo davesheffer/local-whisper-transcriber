@@ -24,8 +24,10 @@ when relevant):
 
 import json
 import os
+from pathlib import Path
 import sys
 import threading
+import time
 import traceback
 import warnings
 
@@ -40,8 +42,10 @@ except Exception:
 
 warnings.filterwarnings("ignore")
 
-# Import heavy deps lazily so a `--help`/quick start doesn't pay for them
-import torch
+# CTranslate2 runs inference; a CPU-only PyTorch installation says nothing
+# about whether CTranslate2 can use CUDA (and PyTorch is not required).
+import ctranslate2
+import numpy as np
 from faster_whisper import WhisperModel
 
 try:
@@ -89,6 +93,24 @@ def clear_cancel(job_id):
 # ---------------------------------------------------------------------------
 # Model loading
 # ---------------------------------------------------------------------------
+_dll_directories = []  # Keep Windows DLL directory handles alive.
+
+
+def configure_cuda_libraries():
+    """Find optional NVIDIA pip wheels without changing the system PATH."""
+    if os.name != "nt":
+        return
+    directories = []
+    for root in sys.path:
+        for package in ("cublas", "cudnn", "cuda_nvrtc", "cuda_runtime"):
+            directory = Path(root) / "nvidia" / package / "bin"
+            if directory.is_dir() and str(directory) not in directories:
+                directories.append(str(directory))
+                _dll_directories.append(os.add_dll_directory(str(directory)))
+    if directories:
+        os.environ["PATH"] = os.pathsep.join(directories + [os.environ.get("PATH", "")])
+
+
 def load_model(model_name):
     """
     Load faster-whisper with the fastest sensible settings for the available
@@ -99,24 +121,43 @@ def load_model(model_name):
     Returns (transcriber, device) where `transcriber` is either a WhisperModel
     or a BatchedInferencePipeline wrapping one. Both expose `.transcribe(...)`.
     """
-    has_cuda = torch.cuda.is_available()
-    if has_cuda:
-        device = "cuda"
-        # int8_float16 is ~10-20% faster than float16 with negligible accuracy loss
-        compute_type = os.environ.get("WHISPER_COMPUTE_TYPE", "int8_float16")
-        gpu_name = torch.cuda.get_device_name(0)
-        log(f"Loading {model_name} on CUDA ({gpu_name}) compute_type={compute_type}")
-    else:
+    configure_cuda_libraries()
+    requested_device = os.environ.get("WHISPER_DEVICE", "auto").lower()
+    if requested_device not in ("auto", "cpu", "cuda"):
+        raise ValueError("WHISPER_DEVICE must be auto, cpu, or cuda")
+    device = requested_device
+    if device == "auto":
+        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+
+    def create(device):
+        compute_type = os.environ.get(
+            "WHISPER_COMPUTE_TYPE", "int8_float16" if device == "cuda" else "int8"
+        )
+        log(f"Loading {model_name} on {device} compute_type={compute_type}")
+        kwargs = {"device": device, "compute_type": compute_type, "num_workers": 1}
+        if device == "cpu":
+            kwargs["cpu_threads"] = max(1, int(os.environ.get(
+                "WHISPER_CPU_THREADS", str(os.cpu_count() or 4)
+            )))
+        loaded = WhisperModel(model_name, **kwargs)
+        if device == "cuda":
+            # CUDA DLLs can load lazily. Exercise the encoder before announcing
+            # readiness so missing cuBLAS/cuDNN fails here, not on the first file.
+            features = loaded.feature_extractor
+            loaded.encode(np.zeros(
+                (features.mel_filters.shape[0], features.nb_max_frames), dtype=np.float32
+            ))
+        return loaded
+
+    try:
+        model = create(device)
+    except (RuntimeError, OSError) as exc:
+        if device != "cuda" or requested_device != "auto":
+            raise
+        log(f"CUDA initialization failed: {exc}. Falling back to CPU; "
+            "install server/requirements-gpu.txt for NVIDIA libraries.")
         device = "cpu"
-        compute_type = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
-        log(f"Loading {model_name} on CPU compute_type={compute_type}")
-
-    kwargs = {"device": device, "compute_type": compute_type}
-    if not has_cuda:
-        kwargs["cpu_threads"] = max(1, (os.cpu_count() or 4))
-        kwargs["num_workers"] = 1
-
-    model = WhisperModel(model_name, **kwargs)
+        model = create(device)
 
     # Wrap in a BatchedInferencePipeline when available — this runs VAD-detected
     # segments through the model in parallel, often 2-4x faster on GPU.
@@ -139,6 +180,13 @@ def run_transcription(model, job):
     job_id = job.get("jobId")
     file_path = job["file"]
     language = job.get("language") or "he"
+    started = time.perf_counter()
+    first_segment_seconds = None
+
+    if is_cancelled(job_id):
+        emit({"type": "cancelled", "jobId": job_id})
+        clear_cancel(job_id)
+        return
 
     if not os.path.exists(file_path):
         emit({"type": "error", "jobId": job_id, "error": f"File not found: {file_path}"})
@@ -198,6 +246,8 @@ def run_transcription(model, job):
             chunk_index += 1
             text = (segment.text or "").strip()
             if text:
+                if first_segment_seconds is None:
+                    first_segment_seconds = time.perf_counter() - started
                 collected.append(text)
                 emit({
                     "type": "segment",
@@ -222,11 +272,20 @@ def run_transcription(model, job):
                     })
 
         final_text = " ".join(collected).strip()
+        elapsed = time.perf_counter() - started
+        metrics = {
+            "elapsed_seconds": round(elapsed, 3),
+            "audio_seconds": round(total_duration, 3),
+            "first_segment_seconds": round(first_segment_seconds, 3) if first_segment_seconds is not None else None,
+            "realtime_factor": round(elapsed / total_duration, 4) if total_duration > 0 else None,
+        }
+        log(f"Completed job {job_id}: {json.dumps(metrics)}")
         emit({
             "type": "complete",
             "jobId": job_id,
             "text": final_text,
             "language": detected_language,
+            "metrics": metrics,
         })
     except Exception as e:
         emit({
@@ -293,7 +352,9 @@ def main():
         })
         sys.exit(1)
 
-    emit({"type": "ready", "model": model_name, "device": device})
+    underlying = model.model if _HAS_BATCHED and isinstance(model, BatchedInferencePipeline) else model
+    emit({"type": "ready", "model": model_name, "device": device,
+          "compute_type": underlying.model.compute_type})
 
     reader = threading.Thread(target=stdin_reader, daemon=True)
     reader.start()

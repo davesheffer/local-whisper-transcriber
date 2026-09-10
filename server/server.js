@@ -143,6 +143,8 @@ function sendToWorker(handle, obj) {
 function handleWorkerMessage(handle, msg) {
   if (msg.type === 'ready') {
     handle.ready = true;
+    handle.device = msg.device;
+    handle.computeType = msg.compute_type;
     handle._resolveReady && handle._resolveReady();
     console.log(`[worker:${handle.modelName}] ready (device=${msg.device})`);
     return;
@@ -157,7 +159,7 @@ function handleWorkerMessage(handle, msg) {
 
   if (msg.type === 'complete') {
     if (!job.responded && job.res && !job.res.headersSent) {
-      job.res.json({ text: msg.text, language: msg.language });
+      job.res.json({ text: msg.text, language: msg.language, metrics: msg.metrics });
       job.responded = true;
     }
     finishJob(jobId);
@@ -247,7 +249,10 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
   const status = {};
   for (const [name, w] of workers.entries()) {
-    status[name] = { ready: w.ready, active: w.activeJobIds.size };
+    status[name] = {
+      ready: w.ready, active: w.activeJobIds.size,
+      device: w.device || null, compute_type: w.computeType || null,
+    };
   }
   res.json({ status: 'ok', workers: status });
 });
