@@ -167,13 +167,14 @@ function App() {
     
     const droppedFile = e.dataTransfer.files[0];
     const name = droppedFile?.name.toLowerCase() || '';
-    const okType = ['audio/m4a', 'audio/x-m4a', 'audio/mp4', 'video/mp4'].includes(droppedFile?.type);
-    if (droppedFile && (okType || name.endsWith('.m4a') || name.endsWith('.mp4'))) {
+    const okType = ['audio/m4a', 'audio/x-m4a', 'audio/mp4', 'video/mp4', 'audio/ogg', 'video/ogg', 'application/ogg'].includes(droppedFile?.type);
+    const okExt = ['.m4a', '.mp4', '.ogg', '.oga', '.opus'].some((ext) => name.endsWith(ext));
+    if (droppedFile && (okType || okExt)) {
       setFile(droppedFile);
       setError('');
       setTranscription('');
     } else {
-      setError('Please drop a valid M4A or MP4 file');
+      setError('Please drop a valid M4A, MP4, or OGG file');
     }
   };
 
@@ -321,14 +322,14 @@ function App() {
             type="file"
             ref={fileInputRef}
             onChange={handleFileInput}
-            accept=".m4a,.mp4,audio/m4a,audio/x-m4a,audio/mp4,video/mp4"
+            accept=".m4a,.mp4,.ogg,.oga,.opus,audio/m4a,audio/x-m4a,audio/mp4,video/mp4,audio/ogg,video/ogg,application/ogg"
             style={{ display: 'none' }}
           />
           
           {!file ? (
             <>
               <div className="upload-icon"><ArrowUpTrayIcon /></div>
-              <p className="dropzone-text">Drag & Drop M4A or MP4 file</p>
+              <p className="dropzone-text">Drag & Drop M4A, MP4, or OGG file</p>
               <p className="dropzone-subtext">or click to browse</p>
             </>
           ) : (
