@@ -1,0 +1,39 @@
+{
+  "id": "dec_98a928acae",
+  "title": "feat: accept OGG and Opus audio uploads",
+  "topic": null,
+  "status": "accepted",
+  "context": "Touched 1 file(s) across src/App.js.",
+  "decision": "Introduced code in src/App.js (1 file(s)).",
+  "consequences": [],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/App.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "7cdd2f6",
+  "valid_from": "2026-09-10T12:40:29+03:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "inferred",
+    "confidence": 0.3,
+    "evidence": [
+      "commit:7cdd2f6",
+      "synth:provider=deterministic",
+      "branch:main",
+      "src/App.js"
+    ],
+    "last_verified": "2026-09-10T09:40:31.073Z"
+  },
+  "date": "2026-09-10T12:40:29+03:00"
+}
