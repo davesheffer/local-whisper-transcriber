@@ -5,7 +5,8 @@
       "command": "npx",
       "args": [
         "-y",
-        "@davesheffer/hunch",
+        "--package=hunch-exact@npm:@davesheffer/hunch@1.43.0",
+        "hunch",
         "mcp"
       ]
     }

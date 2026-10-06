@@ -26,6 +26,10 @@ yarn-error.log*
 .hunch/*.sqlite-wal
 .hunch/*.sqlite-journal
 .hunch/**/*.tmp*
+.hunch-cache/
 .hunch/local.json
+.hunch/events.log
+.hunch/pending-commit-repairs.json
+.hunch/dropped-commit-repairs.json
 .hunch-private/
 # <<< hunch <<<
