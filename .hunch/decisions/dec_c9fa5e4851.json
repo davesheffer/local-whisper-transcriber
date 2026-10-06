@@ -1,0 +1,116 @@
+{
+  "id": "dec_c9fa5e4851",
+  "title": "Embed Hunch as system-wide hook layer across all development harnesses",
+  "topic": null,
+  "status": "accepted",
+  "context": "User maintains engineering memory (findings, decisions, constraints) via hunch. Previous approach required manual recording. Need unified observation across Claude, Codex, Cursor, VS Code, Windsurf, Antigravity, Copilot.",
+  "decision": "Configure hunch 1.43.0 as automatic hook interceptor: PreInvocation/PreToolUse/Stop hooks on all file operations, MCP server registration, consistent configuration across harnesses. Expands PreToolUse matcher to catch Bash/PowerShell, not just file writes.",
+  "consequences": [
+    "File operations now trigger hunch hooks automatically — findings/decisions can be recorded in-flight",
+    "Hunch knowledge graph becomes source of truth for institutional memory across sessions",
+    "All harnesses use same hunch version and hook behavior — unified observation",
+    "15ms hook latency added per file operation (timeout: 15s)"
+  ],
+  "alternatives_rejected": [
+    "Keep manual post-hoc recording: requires discipline, misses context, no automation",
+    "Per-harness hunch config: fragmented, version drift, inconsistent behavior",
+    "Hunch as passive tool (no hooks): loses capture window, knowledge must be solicited"
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Keep manual post-hoc recording: requires discipline, misses context, no automation",
+      "scope": [
+        ".claude/commands/**",
+        ".github/**",
+        ".windsurf/rules/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    },
+    {
+      "alternative": "Per-harness hunch config: fragmented, version drift, inconsistent behavior",
+      "scope": [
+        ".claude/commands/**",
+        ".github/**",
+        ".windsurf/rules/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    },
+    {
+      "alternative": "Hunch as passive tool (no hooks): loses capture window, knowledge must be solicited",
+      "scope": [
+        ".claude/commands/**",
+        ".github/**",
+        ".windsurf/rules/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [],
+  "related_files": [
+    ".claude/commands/audit.md",
+    ".claude/commands/hunch-fix.md",
+    ".claude/commands/hunch-fragile.md",
+    ".claude/commands/hunch-why.md",
+    ".claude/commands/worktrees.md",
+    ".github/copilot-instructions.md",
+    ".windsurf/rules/hunch.md",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "e0221c0",
+  "valid_from": "2026-10-06T09:35:43+03:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:e0221c0",
+      "synth:provider=claude-cli",
+      "branch:main",
+      ".claude/commands/audit.md",
+      ".claude/commands/hunch-fix.md",
+      ".claude/commands/hunch-fragile.md",
+      ".claude/commands/hunch-why.md",
+      ".claude/commands/worktrees.md",
+      ".github/copilot-instructions.md",
+      ".windsurf/rules/hunch.md",
+      "AGENTS.md"
+    ],
+    "last_verified": "2026-10-06T06:36:05.661Z"
+  },
+  "date": "2026-10-06T09:35:43+03:00"
+}
