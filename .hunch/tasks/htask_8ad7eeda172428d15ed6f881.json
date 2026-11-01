@@ -1,0 +1,42 @@
+{
+  "id": "htask_8ad7eeda172428d15ed6f881",
+  "title": "Assistant task",
+  "state": "completed",
+  "started_at": "2026-11-01T08:42:52.981Z",
+  "finished_at": "2026-11-01T09:05:55.046Z",
+  "coverage": "no-relevant-memory",
+  "lessons": [],
+  "applied": [],
+  "saved": [],
+  "checks": [
+    {
+      "label": "Verification command",
+      "state": "failed",
+      "exit_code": 1
+    },
+    {
+      "label": "Verification command",
+      "state": "passed",
+      "exit_code": 0
+    }
+  ],
+  "conformance": [],
+  "refusals": 0,
+  "files": [
+    "server/test_whisper_worker.py",
+    "server/whisper_worker.py"
+  ],
+  "supersedes": [],
+  "source_snapshot": "sha256:ad55f32b6d31b6d693d5a45b447c2b57e0f5aca0779ec44ada3a2a1989fb856d",
+  "report_hash": "sha256:18d67a1c9d54e97e0e84543f0c9d0b32d76e78526520433f6b38d3f514e41aa7",
+  "provenance": {
+    "source": "task_report",
+    "confidence": 1,
+    "evidence": [
+      "hunch report htask_8ad7eeda172428d15ed6f881",
+      "hunch report htask_fbda9f79f1eb7450f11e934d",
+      "hunch report htask_9a5aafec2ee1c1f5f19e5ffe"
+    ],
+    "last_verified": "2026-11-01T09:05:55.046Z"
+  }
+}
