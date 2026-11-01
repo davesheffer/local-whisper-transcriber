@@ -46,7 +46,7 @@ warnings.filterwarnings("ignore")
 # about whether CTranslate2 can use CUDA (and PyTorch is not required).
 import ctranslate2
 import numpy as np
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel, decode_audio
 
 try:
     from faster_whisper import BatchedInferencePipeline
@@ -176,6 +176,53 @@ def load_model(model_name):
 # ---------------------------------------------------------------------------
 # Transcription
 # ---------------------------------------------------------------------------
+SAMPLE_RATE = 16000
+VAD_PARAMETERS = {"min_silence_duration_ms": 500}
+# Greedy decoding can loop on hard audio (cross-talk) and come back empty for a
+# whole ~30s window. Any untranscribed stretch this long gets a careful re-pass;
+# its own VAD makes truly silent gaps cheap.
+GAP_MIN_SECONDS = float(os.environ.get("WHISPER_GAP_MIN_SECONDS", "3"))
+# Repetition loops ("אהה. אהה. ...") compress far better than real speech.
+MAX_COMPRESSION_RATIO = 2.4
+
+
+def find_gaps(spans, total_duration, min_gap=GAP_MIN_SECONDS):
+    """Return (start, end) stretches of at least `min_gap` seconds not covered by any span."""
+    gaps = []
+    covered_until = 0.0
+    for start, end in sorted(spans):
+        if start - covered_until >= min_gap:
+            gaps.append((covered_until, start))
+        covered_until = max(covered_until, end)
+    if total_duration - covered_until >= min_gap:
+        gaps.append((covered_until, total_duration))
+    return gaps
+
+
+def recover_gap(model, audio, start, end, language):
+    """Re-transcribe one gap with beam search and temperature fallback.
+
+    Yields lazily so the caller can honour a cancel between decoded windows.
+    """
+    clip = audio[int(start * SAMPLE_RATE):int(end * SAMPLE_RATE)]
+    segments, _ = model.transcribe(
+        clip,
+        language=language,
+        beam_size=5,
+        condition_on_previous_text=False,
+        vad_filter=True,
+        vad_parameters=VAD_PARAMETERS,
+    )
+    for segment in segments:
+        text = (segment.text or "").strip()
+        if text and getattr(segment, "compression_ratio", 0.0) <= MAX_COMPRESSION_RATIO:
+            yield {
+                "start": start + float(segment.start),
+                "end": start + float(segment.end),
+                "text": text,
+            }
+
+
 def run_transcription(model, job):
     job_id = job.get("jobId")
     file_path = job["file"]
@@ -195,6 +242,9 @@ def run_transcription(model, job):
     try:
         emit({"type": "status", "jobId": job_id, "message": "Starting transcription..."})
 
+        # Decoded once: the fast pass and the gap re-pass both read it.
+        audio = decode_audio(file_path, sampling_rate=SAMPLE_RATE)
+
         # Fast settings:
         #   beam_size=1                       -> greedy decoding, much faster
         #   condition_on_previous_text=False  -> avoids slow context drift, reduces hallucinations
@@ -204,19 +254,21 @@ def run_transcription(model, job):
             beam_size=1,
             without_timestamps=False,
             vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
+            vad_parameters=VAD_PARAMETERS,
         )
 
-        if isinstance(model, BatchedInferencePipeline) if _HAS_BATCHED else False:
+        batched = isinstance(model, BatchedInferencePipeline) if _HAS_BATCHED else False
+        base_model = model.model if batched else model
+        if batched:
             batch_size = int(os.environ.get("WHISPER_BATCH_SIZE", "8"))
             segments, info = model.transcribe(
-                file_path,
+                audio,
                 batch_size=batch_size,
                 **common_kwargs,
             )
         else:
             segments, info = model.transcribe(
-                file_path,
+                audio,
                 best_of=1,
                 temperature=0.0,
                 condition_on_previous_text=False,
@@ -248,7 +300,11 @@ def run_transcription(model, job):
             if text:
                 if first_segment_seconds is None:
                     first_segment_seconds = time.perf_counter() - started
-                collected.append(text)
+                collected.append({
+                    "start": float(segment.start),
+                    "end": float(segment.end),
+                    "text": text,
+                })
                 emit({
                     "type": "segment",
                     "jobId": job_id,
@@ -271,13 +327,51 @@ def run_transcription(model, job):
                         "percent": percent,
                     })
 
-        final_text = " ".join(collected).strip()
+        gaps = find_gaps([(s["start"], s["end"]) for s in collected], total_duration)
+        recovered_count = 0
+        if gaps:
+            emit({
+                "type": "status",
+                "jobId": job_id,
+                "message": f"Re-checking {len(gaps)} untranscribed passages...",
+            })
+        for gap_start, gap_end in gaps:
+            if is_cancelled(job_id):
+                emit({"type": "cancelled", "jobId": job_id})
+                clear_cancel(job_id)
+                return
+            for item in recover_gap(base_model, audio, gap_start, gap_end, language):
+                if is_cancelled(job_id):
+                    emit({"type": "cancelled", "jobId": job_id})
+                    clear_cancel(job_id)
+                    return
+                chunk_index += 1
+                recovered_count += 1
+                collected.append(item)
+                emit({
+                    "type": "segment",
+                    "jobId": job_id,
+                    "chunk": chunk_index,
+                    "text": item["text"],
+                    "start_time": item["start"],
+                    "end_time": item["end"],
+                })
+
+        if is_cancelled(job_id):
+            emit({"type": "cancelled", "jobId": job_id})
+            clear_cancel(job_id)
+            return
+
+        collected.sort(key=lambda s: s["start"])
+        final_text = " ".join(s["text"] for s in collected).strip()
         elapsed = time.perf_counter() - started
         metrics = {
             "elapsed_seconds": round(elapsed, 3),
             "audio_seconds": round(total_duration, 3),
             "first_segment_seconds": round(first_segment_seconds, 3) if first_segment_seconds is not None else None,
             "realtime_factor": round(elapsed / total_duration, 4) if total_duration > 0 else None,
+            "gaps_checked": len(gaps),
+            "recovered_segments": recovered_count,
         }
         log(f"Completed job {job_id}: {json.dumps(metrics)}")
         emit({
