@@ -3,7 +3,7 @@
   "title": "Assistant task",
   "state": "completed",
   "started_at": "2026-11-01T08:42:52.981Z",
-  "finished_at": "2026-11-01T09:08:23.807Z",
+  "finished_at": "2026-11-01T09:14:51.132Z",
   "coverage": "no-relevant-memory",
   "lessons": [],
   "applied": [],
@@ -18,6 +18,11 @@
       "label": "Verification command",
       "state": "passed",
       "exit_code": 0
+    },
+    {
+      "label": "Verification command",
+      "state": "passed",
+      "exit_code": 0
     }
   ],
   "conformance": [],
@@ -27,8 +32,8 @@
     "server/whisper_worker.py"
   ],
   "supersedes": [],
-  "source_snapshot": "sha256:ad55f32b6d31b6d693d5a45b447c2b57e0f5aca0779ec44ada3a2a1989fb856d",
-  "report_hash": "sha256:3bb07a662d24e2b39e3574f26673f70c646d8a85047be317ee0d98bd8f1377fb",
+  "source_snapshot": "sha256:b8dd42a87557f0e6fa34fb324d6e3018e60c3d57ad57025c8fda461ef1a08415",
+  "report_hash": "sha256:5996d0488cedeb1cdc587382628ac6f24393e70e709ac169f4a1c9f7600b7ace",
   "provenance": {
     "source": "task_report",
     "confidence": 1,
@@ -36,8 +41,9 @@
       "hunch report htask_8ad7eeda172428d15ed6f881",
       "hunch report htask_fbda9f79f1eb7450f11e934d",
       "hunch report htask_9a5aafec2ee1c1f5f19e5ffe",
-      "hunch report htask_499997da9976ff5f579c554a"
+      "hunch report htask_499997da9976ff5f579c554a",
+      "hunch report htask_8280aa39d89b8472ec3a5d2c"
     ],
-    "last_verified": "2026-11-01T09:08:23.807Z"
+    "last_verified": "2026-11-01T09:14:51.132Z"
   }
 }
