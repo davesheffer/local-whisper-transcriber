@@ -2,19 +2,27 @@ import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
 import io from 'socket.io-client';
-import { 
-  ArrowUpTrayIcon, 
-  MusicalNoteIcon, 
+import Recorder from './Recorder';
+import { API } from './api';
+import {
+  ArrowUpTrayIcon,
+  MusicalNoteIcon,
   ExclamationTriangleIcon,
-  PlayIcon,
   StopIcon,
-  DocumentTextIcon,
-  ClipboardDocumentIcon,
+  ArrowDownTrayIcon,
   ArrowPathIcon,
-  InformationCircleIcon
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 function App() {
+  const [tab, setTab] = useState(() => {
+    try { return localStorage.getItem('app.tab') || 'record'; } catch { return 'record'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('app.tab', tab); } catch { /* storage unavailable */ }
+  }, [tab]);
+  const [health, setHealth] = useState({ ok: null, gpu: false });
+  const [copied, setCopied] = useState(false);
   const [file, setFile] = useState(null);
   const [transcription, setTranscription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +45,7 @@ function App() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    socketRef.current = io('http://localhost:5000');
+    socketRef.current = io(API);
 
     socketRef.current.on('connect', () => {
       console.log('[✓] WebSocket connected:', socketRef.current.id);
@@ -118,6 +126,34 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Server status pill: poll health every 10 s.
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const r = await fetch(`${API}/api/health`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        const gpu = Object.values(j.workers || {}).some((w) => w && w.device === 'cuda');
+        if (alive) setHealth({ ok: true, gpu });
+      } catch {
+        if (alive) setHealth((h) => ({ ok: false, gpu: h.gpu }));
+      }
+    };
+    check();
+    const timer = setInterval(check, 10000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+
+  const onTabKey = (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const next = tab === 'record' ? 'file' : 'record';
+    setTab(next);
+    const el = document.getElementById(`tab-${next}`);
+    if (el) el.focus();
+  };
+
   const handleCancelTranscription = () => {
     if (socketRef.current && loading) {
       socketRef.current.emit('cancel-transcription');
@@ -135,7 +171,7 @@ function App() {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       axios.post(
-        'http://localhost:5000/api/warmup',
+        `${API}/api/warmup`,
         { model: selectedModel },
         { signal: controller.signal, timeout: 600000 }
       ).then(() => {
@@ -210,7 +246,7 @@ function App() {
 
       // Call local Whisper server with streaming support
       const response = await axios.post(
-        'http://localhost:5000/api/transcribe',
+        `${API}/api/transcribe`,
         formData,
         {
           headers: {
@@ -269,45 +305,61 @@ function App() {
   };
 
   const modelOptions = [
-    { value: 'tiny', label: 'Tiny', desc: 'Fastest (~1-3 min)', size: '39M' },
-    { value: 'base', label: 'Base', desc: 'Balanced (~3-8 min)', size: '74M' },
-    { value: 'small', label: 'Small', desc: 'Better (~5-12 min)', size: '244M' },
-    { value: 'medium', label: 'Medium', desc: 'High (~10-20 min)', size: '769M' },
-    { value: 'large-v3-turbo', label: 'Turbo', desc: 'Fast + best (~5-10 min)', size: '809M' },
-    { value: 'large-v3', label: 'Large', desc: 'Best (~20-40 min)', size: '1550M' },
+    { value: 'tiny', label: 'Fastest', desc: '~1-3 min' },
+    { value: 'base', label: 'Balanced', desc: '~3-8 min' },
+    { value: 'small', label: 'More accurate', desc: '~5-12 min' },
+    { value: 'medium', label: 'Most accurate (slow)', desc: '~10-20 min' },
+    { value: 'large-v3-turbo', label: 'Turbo (fast + best)', desc: '~5-10 min' },
+    { value: 'large-v3', label: 'Large (best, slow)', desc: '~20-40 min' },
   ];
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(transcription);
+    navigator.clipboard.writeText(transcription).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const downloadTxt = () => {
+    const url = URL.createObjectURL(new Blob([transcription], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(file?.name || 'transcript').replace(/\.[^.]+$/, '')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="App">
       <div className="container">
-        <div className="header">
-          <h1><MusicalNoteIcon className="title-icon" /> Audio Transcriber</h1>
-          <div className="badges">
-            <span className="badge badge-hebrew">Hebrew</span>
-            <span className="badge badge-gpu">GPU</span>
-          </div>
+        <header className="header">
+          <h1>Meeting Transcriber</h1>
+          <span className={`status-pill ${health.ok === false ? 'down' : health.ok ? 'up' : 'wait'}`} role="status">
+            <span className="status-dot" aria-hidden="true" />
+            {health.ok === false ? 'Server offline' : health.ok ? `Ready${health.gpu ? ' · GPU' : ''}` : 'Connecting…'}
+          </span>
+        </header>
+
+        <div className="tabs" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" id="tab-record" aria-selected={tab === 'record'} aria-controls="panel-main" tabIndex={tab === 'record' ? 0 : -1} className={`tab ${tab === 'record' ? 'active' : ''}`} onClick={() => setTab('record')} onKeyDown={onTabKey}>
+            Record meeting
+          </button>
+          <button type="button" role="tab" id="tab-file" aria-selected={tab === 'file'} aria-controls="panel-main" tabIndex={tab === 'file' ? 0 : -1} className={`tab ${tab === 'file' ? 'active' : ''}`} onClick={() => setTab('file')} onKeyDown={onTabKey}>
+            Transcribe a file
+          </button>
         </div>
 
+        <div role="tabpanel" id="panel-main" aria-labelledby={`tab-${tab}`} className="tab-panel">
+        {tab === 'record' ? <Recorder /> : (<>
+
         {!file && (
-          <div className="model-selector">
-            <label>Transcription Quality:</label>
-            <div className="model-options">
-              {modelOptions.map(option => (
-                <div
-                  key={option.value}
-                  className={`model-option ${selectedModel === option.value ? 'selected' : ''}`}
-                  onClick={() => setSelectedModel(option.value)}
-                >
-                  <div className="model-label">{option.label}</div>
-                  <div className="model-desc">{option.desc}</div>
-                  <div className="model-size">{option.size}</div>
-                </div>
+          <div className="field model-field">
+            <label htmlFor="file-accuracy">Accuracy</label>
+            <select id="file-accuracy" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+              {modelOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label} ({option.desc})</option>
               ))}
-            </div>
+            </select>
           </div>
         )}
 
@@ -316,60 +368,58 @@ function App() {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => !file && fileInputRef.current?.click()}
         >
           <input
+            id="file-input"
             type="file"
             ref={fileInputRef}
             onChange={handleFileInput}
             accept=".m4a,.mp4,.ogg,.oga,.opus,audio/m4a,audio/x-m4a,audio/mp4,video/mp4,audio/ogg,video/ogg,application/ogg"
-            style={{ display: 'none' }}
+            className="visually-hidden"
+            aria-label="Choose an audio file"
           />
-          
+
           {!file ? (
             <>
-              <div className="upload-icon"><ArrowUpTrayIcon /></div>
-              <p className="dropzone-text">Drag & Drop M4A, MP4, or OGG file</p>
-              <p className="dropzone-subtext">or click to browse</p>
+              <div className="upload-icon"><ArrowUpTrayIcon aria-hidden="true" /></div>
+              <p className="dropzone-text">
+                Drop an audio file here or{' '}
+                <button type="button" className="link-btn" onClick={() => fileInputRef.current?.click()}>choose a file</button>
+              </p>
+              <p className="dropzone-subtext">M4A, MP4, OGG, OGA or OPUS</p>
             </>
           ) : (
             <>
-              <div className="file-icon"><MusicalNoteIcon /></div>
-              <p className="file-name">{file.name}</p>
+              <div className="file-icon"><MusicalNoteIcon aria-hidden="true" /></div>
+              <p className="file-name" dir="auto">{file.name}</p>
               <p className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-              <button className="clear-btn" onClick={(e) => { e.stopPropagation(); handleClearFile(); }}>
-                ✕
+              <button type="button" className="icon-btn clear-btn" aria-label="Remove file" title="Remove file" onClick={handleClearFile}>
+                <XMarkIcon aria-hidden="true" />
               </button>
             </>
           )}
         </div>
 
         {error && (
-          <div className="error-message">
-            <ExclamationTriangleIcon className="error-icon" /> {error}
+          <div className="error-message" role="alert">
+            <ExclamationTriangleIcon className="error-icon" aria-hidden="true" /> <span>{error}</span>
           </div>
         )}
 
         {file && !transcription && (
           <>
             {!loading ? (
-              <button
-                className="transcribe-btn"
-                onClick={handleTranscribe}
-              >
-                <PlayIcon className="btn-icon" /> Start Transcription
+              <button type="button" className="primary-btn big" onClick={handleTranscribe}>
+                Transcribe file
               </button>
             ) : (
-              <button
-                className="stop-btn"
-                onClick={handleCancelTranscription}
-              >
-                <StopIcon className="btn-icon" /> Stop Transcription
+              <button type="button" className="ghost-btn danger big" onClick={handleCancelTranscription}>
+                <StopIcon aria-hidden="true" /> Stop transcription
               </button>
             )}
-            
+
             {loading && (
-              <div className="progress-section">
+              <div className="progress-section" aria-live="polite">
                 <div className="progress-bar-container">
                   <div className="progress-bar" style={{ width: `${progress}%` }}></div>
                 </div>
@@ -382,16 +432,16 @@ function App() {
           </>
         )}
 
-        {streamingSegments.length > 0 && (
+        {streamingSegments.length > 0 && !transcription && (
           <div className="streaming-box" ref={transcriptionBoxRef}>
             <div className="streaming-header">
-              <h3><span className="live-dot">●</span> Live Transcription</h3>
-              <span className="live-badge">LIVE</span>
+              <h3>Live transcript</h3>
+              <span className="live-badge"><span className="live-dot" aria-hidden="true">●</span> Live</span>
             </div>
-            <div className="streaming-content">
+            <div className="streaming-content" dir="auto">
               {streamingSegments.map((segment, index) => (
-                <span 
-                  key={segment.id} 
+                <span
+                  key={segment.id}
                   className={segment.new ? 'segment-new' : 'segment'}
                 >
                   {segment.text}
@@ -403,27 +453,26 @@ function App() {
         )}
 
         {transcription && (
-          <div className="transcription-result">
+          <div className="transcription-result rec-item">
             <div className="result-header">
-              <h2><DocumentTextIcon className="header-icon" /> Transcription</h2>
-              <button className="copy-btn" onClick={copyToClipboard}>
-                <ClipboardDocumentIcon className="btn-icon" /> Copy
-              </button>
+              <h2>Transcript</h2>
             </div>
-            <div className="transcription-text">
+            <div className="transcription-text" dir="auto">
               {transcription}
             </div>
-            <button className="new-transcription-btn" onClick={handleClearFile}>
-              <ArrowPathIcon className="btn-icon" /> Transcribe Another File
-            </button>
+            <div className="rec-actions">
+              <button type="button" className="primary-btn" onClick={copyToClipboard}>{copied ? 'Copied ✓' : 'Copy text'}</button>
+              <button type="button" className="ghost-btn" onClick={downloadTxt}><ArrowDownTrayIcon aria-hidden="true" />Download .txt</button>
+              <button type="button" className="ghost-btn" onClick={handleClearFile}><ArrowPathIcon aria-hidden="true" />Transcribe another file</button>
+            </div>
           </div>
         )}
 
         {!file && !transcription && (
-          <div className="info-footer">
-            <p><InformationCircleIcon className="info-icon" /> Private & Free • No API Keys • Runs Locally</p>
-          </div>
+          <p className="info-footer">Private and free. Runs locally on this computer.</p>
         )}
+        </>)}
+        </div>
       </div>
     </div>
   );
