@@ -271,6 +271,24 @@ async function translateChunk(translator, chunk, signal) {
   return translator.translate(chunk, { signal });
 }
 
+const sleepAbortable = (ms, signal) => withAbort(new Promise((r) => setTimeout(r, ms)), signal);
+
+// Chrome can throw NotSupportedError on the first create() for a pair whose pack is
+// still downloadable, yet download it anyway. Wait for 'available', then create once more.
+async function recoverTranslator(a, b, origErr, signal, onProgress) {
+  const avail = () => safeAvailability(() => TR().availability({ sourceLanguage: a, targetLanguage: b }));
+  let state = await avail();
+  if (state !== 'downloadable' && state !== 'downloading' && state !== 'available') throw origErr;
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (state !== 'available') {
+    if (state === 'unavailable' || Date.now() > deadline) throw origErr;
+    await sleepAbortable(1000, signal);
+    state = await avail();
+  }
+  checkAbort(signal);
+  return withAbort(getTranslator(a, b, (loaded) => onProgress && onProgress({ stage: 'download', loaded })), signal);
+}
+
 // Translate text line-preserving: each chunk is a group of lines; if the translator
 // merged lines, that chunk is re-translated line by line so line i stays line i.
 export async function translateText(text, from, to, signal, onProgress) {
@@ -279,7 +297,13 @@ export async function translateText(text, from, to, signal, onProgress) {
   if (!TR()) throw friendly('Translation is not available in this browser.');
   // getTranslator runs before the first await (user activation for downloads).
   const tp = getTranslator(a, b, (loaded) => onProgress && onProgress({ stage: 'download', loaded }));
-  const translator = await withAbort(tp, signal);
+  let translator;
+  try {
+    translator = await withAbort(tp, signal);
+  } catch (e) {
+    if (isAbort(e) || !e || (e.name !== 'NotSupportedError' && e.name !== 'InvalidStateError')) throw e;
+    translator = await recoverTranslator(a, b, e, signal, onProgress);
+  }
   const chunks = chunkText(text, TRANSLATE_CHARS);
   const out = [];
   for (let i = 0; i < chunks.length; i++) {
