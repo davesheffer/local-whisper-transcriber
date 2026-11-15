@@ -40,7 +40,7 @@ async function translateNotes(s, from, to, signal, onProgress) {
 
 // Notes tab: AI status, generate/regenerate, the summary sections, language toggle, copy and export.
 export default function RecordingNotes({
-  rec, text, segments, lang, hash, summary, pending, ai, auto, actions, onGenerated, onNotesTranslation, onError,
+  rec, text, segments, lang, hash, summary, pending, getStore, ai, auto, actions, onGenerated, onNotesTranslation, onError,
 }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -76,7 +76,11 @@ export default function RecordingNotes({
     translatorStatus(notesLang, target).then((s) => alive && setTrAvail(s));
     return () => { alive = false; };
   }, [has, notesLang, target]);
-  useEffect(() => () => trCtrl.current && trCtrl.current.abort(), []);
+  // Leaving the recording stops its jobs (panels stay mounted across subtab switches).
+  useEffect(() => () => {
+    if (trCtrl.current) trCtrl.current.abort();
+    if (ctrl.current) ctrl.current.abort();
+  }, []);
 
   function chooseLang(l) {
     setViewLang(l);
@@ -114,7 +118,10 @@ export default function RecordingNotes({
     setBusy({ stage: 'start' });
     try {
       const merged = await generateAndSave({
-        rec, text, segments, lang, existing: summary || null, pending, actions, signal: c.signal, onProgress: setBusy,
+        rec, text, segments, lang,
+        existing: getStore ? () => getStore().existing : summary || null,
+        pending: getStore ? () => getStore().pending : pending,
+        actions, signal: c.signal, onProgress: setBusy,
       });
       onGenerated(merged);
     } catch (e) {

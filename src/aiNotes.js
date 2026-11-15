@@ -70,15 +70,19 @@ export async function autoTitle(rec, title, rename) {
 
 // existing: the stored summary (Q&A history is kept; translations only when they were
 // made for the same transcript). pending: Q&A / translations held in memory because the
-// recording had no summary file yet.
+// recording had no summary file yet. Either may be a getter, read once generation is
+// done, so Q&A or translations saved while the model was running are not lost.
 export async function generateAndSave({ rec, text, segments, lang, existing, pending, actions, signal, onProgress }) {
   const s = await summarize({ text, segments, lang, signal, onProgress });
   if (signal && signal.aborted) { const e = new Error('Aborted'); e.name = 'AbortError'; throw e; }
+  const read = (v) => (typeof v === 'function' ? v() : v);
+  const ex = read(existing);
+  const pe = read(pending);
   const sameTr = (o) => o && o.translationsHash === s.sourceHash && o.translations;
   const merged = {
     ...s,
-    qa: [...((existing && existing.qa) || []), ...((pending && pending.qa) || [])],
-    translations: { ...(sameTr(existing) || {}), ...(sameTr(pending) || {}) },
+    qa: [...((ex && ex.qa) || []), ...((pe && pe.qa) || [])],
+    translations: { ...(sameTr(ex) || {}), ...(sameTr(pe) || {}) },
     translationsHash: s.sourceHash,
   };
   if (onProgress) onProgress({ stage: 'save' });

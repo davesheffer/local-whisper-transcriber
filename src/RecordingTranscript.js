@@ -78,6 +78,13 @@ export default function RecordingTranscript({
   const aligned = hasSegs && trLines && trLines.length === segments.length;
   const canTranslate = done && !!sourceText.trim() && trAvail && trAvail !== 'unavailable';
 
+  // An edit changes the transcript hash and drops the cached translation: hide the
+  // translation column instead of leaving it empty under "Hide translation".
+  useEffect(() => {
+    setShowTr(false);
+    if (trCtrl.current) trCtrl.current.abort();
+  }, [hash]);
+
   async function toggleTranslation() {
     if (showTr) { setShowTr(false); if (trCtrl.current) trCtrl.current.abort(); return; }
     setShowTr(true);

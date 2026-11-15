@@ -7,7 +7,7 @@ import { autoSummarizeOn, generateAndSave, resolveLang } from './aiNotes';
 // One job at a time; only when the model is already downloaded ('available'), so no
 // user gesture is needed. Returns { job: { id, progress } | null, cancel(id) }.
 export default function useAutoSummarize(data) {
-  const { recordings, loaded, fetchTranscript, getSegments, saveSummary, rename } = data;
+  const { recordings, loaded, loadFailed, fetchTranscript, getSegments, saveSummary, rename } = data;
   const seen = useRef(null); // id → transcript status at the last list update
   const queue = useRef([]);
   const busy = useRef(false);
@@ -59,8 +59,10 @@ export default function useAutoSummarize(data) {
   }, [runOne]);
 
   // Queue recordings that just moved to 'done' (not the ones already done at startup).
+  // The baseline is taken from the first successful load only: a failed load reports an
+  // empty list, which would make the whole history look "just finished".
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || loadFailed) return;
     const before = seen.current;
     seen.current = new Map(recordings.map((r) => [r.id, r.transcript?.status]));
     if (!before) return;
@@ -70,7 +72,7 @@ export default function useAutoSummarize(data) {
       if (!queue.current.includes(r.id) && ctrl.current?.id !== r.id) { queue.current.push(r.id); added = true; }
     }
     if (added) pump();
-  }, [recordings, loaded, pump]);
+  }, [recordings, loaded, loadFailed, pump]);
 
   const cancel = useCallback((id) => {
     queue.current = queue.current.filter((x) => x !== id);

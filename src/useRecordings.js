@@ -103,7 +103,11 @@ export default function useRecordings() {
   }), []);
   const remove = useCallback((id) => api(recPath(id), { method: 'DELETE' }), []);
   const cancel = useCallback((id) => api(`${recPath(id)}/cancel`, { method: 'POST' }), []);
-  const fetchTranscript = useCallback(async (id) => (await fetch(`${API}${recPath(id)}/transcript`)).text(), []);
+  const fetchTranscript = useCallback(async (id) => {
+    const res = await fetch(`${API}${recPath(id)}/transcript`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.text();
+  }, []);
 
   // Segments, transcript edits and AI notes (404 = none yet → null).
   const getSegments = useCallback((id) => api(`${recPath(id)}/segments`).catch(orNull), []);

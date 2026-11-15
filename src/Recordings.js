@@ -18,7 +18,7 @@ import './RecordingAi.css';
 
 import { API } from './api';
 import { buildMarkdown, normLang, sha256 } from './ai/builtin';
-import { resolveLang, transcriptFor, useAiStatus } from './aiNotes';
+import { isDefaultName, resolveLang, transcriptFor, useAiStatus } from './aiNotes';
 import RecordingAsk from './RecordingAsk';
 import RecordingNotes from './RecordingNotes';
 import RecordingTranscript from './RecordingTranscript';
@@ -248,6 +248,11 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
   // Q&A / translations kept in memory while the recording has no summary file yet;
   // they are merged into the summary when notes are generated.
   const [pending, setPending] = useState(EMPTY_PENDING);
+  const pendingRef = useRef(EMPTY_PENDING);
+  const recRef = useRef(rec);
+  recRef.current = rec;
+  // Summary saves run one after another, so an older PUT never lands after a newer one.
+  const saveChain = useRef(Promise.resolve());
   const [hash, setHash] = useState(null);
   const [detected, setDetected] = useState(null);
   const [sub, setSub] = useState(lastSubtab);
@@ -300,24 +305,44 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
     return () => { alive = false; };
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const saveSerial = useCallback((rid, value, markdown) => {
+    const p = saveChain.current.catch(() => {}).then(() => saveSummary(rid, value, markdown));
+    saveChain.current = p;
+    return p;
+  }, [saveSummary]);
+
   // Apply a change to the summary (or the in-memory store when there is none) and save it.
   const updateStore = useCallback(async (fn) => {
     const cur = summaryRef.current;
-    if (!cur) { setPending((p) => fn(p)); return; }
+    if (!cur) {
+      const nextPending = fn(pendingRef.current);
+      pendingRef.current = nextPending;
+      setPending(nextPending);
+      return;
+    }
     const next = fn(cur);
     summaryRef.current = next;
     setSummary(next);
     try {
-      await saveSummary(rec.id, next, buildMarkdown(rec, next, transcriptFor(segments, text)));
+      await saveSerial(rec.id, next, buildMarkdown(rec, next, transcriptFor(segments, text)));
     } catch (e) {
       console.error('[ai] saving the summary failed', e);
       onError(`Saving the notes file failed: ${e.message}`);
     }
-  }, [rec, segments, text, saveSummary, onError]);
+  }, [rec, segments, text, saveSerial, onError]);
+
+  // Notes generation reads the store when the model is done, not when it started.
+  const getStore = useCallback(() => ({ existing: summaryRef.current, pending: pendingRef.current }), []);
+  // Auto-title only while the recording still has its default name (the user may rename it
+  // while notes are being written).
+  const autoRename = useCallback((rid, newName) => (
+    isDefaultName(recRef.current.name) ? renameRecording(rid, newName) : null
+  ), [renameRecording]);
 
   function onGenerated(merged) {
     summaryRef.current = merged;
     setSummary(merged);
+    pendingRef.current = EMPTY_PENDING;
     setPending(EMPTY_PENDING);
   }
   const onTranslation = (target, out, h) => updateStore((s) => ({
@@ -499,9 +524,10 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
           hash={hash}
           summary={t?.status === 'done' || summary ? summary : null}
           pending={pending}
+          getStore={getStore}
           ai={ai}
           auto={auto}
-          actions={{ saveSummary, rename: renameRecording }}
+          actions={{ saveSummary: saveSerial, rename: autoRename }}
           onGenerated={onGenerated}
           onNotesTranslation={onNotesTranslation}
           onError={onError}
