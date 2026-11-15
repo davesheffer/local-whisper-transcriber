@@ -1,0 +1,45 @@
+{
+  "id": "dec_0a5585da03",
+  "title": "Retry translator creation once its language pack finishes downloading",
+  "topic": null,
+  "status": "accepted",
+  "context": "Chrome can reject the first Translator.create() for a language pair whose pack is still downloadable, yet download the pack anyway. Before this change, that rejection failed the first translation (src/ai/builtin.js translateText).",
+  "decision": "translateText now catches a NotSupportedError or InvalidStateError from the initial create, other than an abort, and calls the new recoverTranslator. That function reads availability. If the state is downloadable, downloading, or available, it polls once per second until the state is 'available', with a 5-minute deadline. It then creates the translator once more, forwarding download progress and honoring the abort signal. If the state is unavailable, the deadline passes, or the initial state is none of the three, it rethrows the original error.",
+  "consequences": [
+    "Only NotSupportedError and InvalidStateError trigger recovery; aborts and other errors propagate unchanged.",
+    "A failing first translation can now block for up to 5 minutes while polling, and the poll stops when the abort signal fires.",
+    "The retry is a single create after availability reports 'available'; there is no repeated create attempt.",
+    "If the pack never becomes available, the original NotSupportedError or InvalidStateError is what the caller sees.",
+    "The recovery depends on the Chrome behavior described in the code comment. The diff contains no test changes, so this is not covered by tests in the shown diff."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/ai/builtin.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "62fd845",
+  "valid_from": "2026-11-15T13:57:23+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:62fd845",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/ai/builtin.js"
+    ],
+    "last_verified": "2026-11-15T11:57:35.313Z"
+  },
+  "date": "2026-11-15T13:57:23+02:00"
+}
