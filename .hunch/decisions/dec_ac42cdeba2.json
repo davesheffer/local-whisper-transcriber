@@ -1,0 +1,59 @@
+{
+  "id": "dec_ac42cdeba2",
+  "title": "Auto-generate recording notes in the background via an App-level hook",
+  "topic": null,
+  "status": "accepted",
+  "context": "Recording detail gained AI features (notes with auto-title, auto-summarize and .md export; timestamped transcript; chat over the meeting). The commit message does not state why notes should generate without a user action.",
+  "decision": "Recording detail is split into Notes | Transcript | Ask sub-tabs. Notes are generated automatically: App.js calls useAutoSummarize(recordingsData) and passes the result to Recordings as `auto`, so recordings that finish transcribing while the app is open get notes in the background. The CSS comment describes these pieces as on-device AI.",
+  "consequences": [
+    "Background summarization is tied to the app being open. The hook's comment limits it to recordings that finish transcribing while the app is open.",
+    "Notes, transcript and chat share one recording detail view, with a new RecordingNotes, RecordingTranscript and RecordingAsk component each.",
+    "Transcript segments support click-to-seek, translation and editing.",
+    "Adds the @heroicons/react/24/outline dependency.",
+    "Recordings, RecordingDetail and load changed; useRecordings and aiNotes.js are also touched."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/App.js",
+    "src/RecordingAsk.js",
+    "src/RecordingNotes.js",
+    "src/RecordingTranscript.js",
+    "src/Recordings.js",
+    "src/aiNotes.js",
+    "src/useAutoSummarize.js",
+    "src/useRecordings.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "6389336",
+  "valid_from": "2026-11-15T13:37:09+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:6389336",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/App.js",
+      "src/RecordingAsk.js",
+      "src/RecordingNotes.js",
+      "src/RecordingTranscript.js",
+      "src/Recordings.js",
+      "src/aiNotes.js",
+      "src/useAutoSummarize.js",
+      "src/useRecordings.js"
+    ],
+    "last_verified": "2026-11-15T11:37:20.067Z"
+  },
+  "date": "2026-11-15T13:37:09+02:00"
+}
