@@ -179,39 +179,7 @@
 }
 .rec-fields .field-toggle { grid-column: 1 / -1; }
 
-/* History */
-.rec-history-head { display: flex; align-items: center; gap: 8px; }
-.rec-history-head h2 { font-size: 1.15rem; }
-.rec-count {
-  min-width: 24px;
-  padding: 0 8px;
-  text-align: center;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-.rec-folder {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0 12px;
-  color: var(--ink-2);
-  font-size: 0.82rem;
-}
-.rec-folder code { font-family: var(--mono); word-break: break-all; }
-.rec-empty {
-  padding: 28px 16px;
-  text-align: center;
-  color: var(--ink-2);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-}
-.rec-empty .ghost-btn { margin-top: 8px; }
-
-.rec-list { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+/* Recording card (also used by the Recordings detail pane and the file tab result) */
 .rec-item {
   padding: 16px;
   border: 1px solid var(--border);
@@ -256,18 +224,6 @@
 .rec-error { color: var(--rec-ink); font-size: 0.85rem; margin-bottom: 8px; word-break: break-word; }
 
 .rec-audio { width: 100%; height: 40px; display: block; margin-bottom: 10px; }
-.rec-preview {
-  color: var(--ink);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.rec-preview.open { display: block; max-height: 360px; overflow-y: auto; }
-
 .rec-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
 
 @media (max-width: 480px) {

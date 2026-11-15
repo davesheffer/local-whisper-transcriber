@@ -1,20 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import io from 'socket.io-client';
 import {
-  ArrowDownTrayIcon,
-  ArrowPathIcon,
-  CheckCircleIcon,
-  ClockIcon,
   ExclamationCircleIcon,
   ExclamationTriangleIcon,
-  PencilSquareIcon,
   StopIcon,
-  TrashIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import './Recorder.css';
 
 import { API } from './api';
+import { LANGUAGES, api, fmtDate, fmtDuration } from './useRecordings';
 
 const MODELS = [
   { value: 'tiny', label: 'Fastest' },
@@ -23,11 +16,6 @@ const MODELS = [
   { value: 'medium', label: 'Most accurate (slow)' },
   { value: 'large-v3-turbo', label: 'Turbo (fast + best)' },
   { value: 'large-v3', label: 'Large (best, slow)' },
-];
-const LANGUAGES = [
-  { value: 'he', label: 'Hebrew' },
-  { value: 'en', label: 'English' },
-  { value: 'auto', label: 'Auto-detect' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -69,14 +57,6 @@ async function dropSession(id) {
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
-const pad = (n) => String(n).padStart(2, '0');
-function fmtDuration(ms) {
-  if (!ms && ms !== 0) return '—';
-  const t = Math.max(0, Math.round(ms / 1000));
-  const h = Math.floor(t / 3600);
-  return `${h ? h + ':' : ''}${pad(Math.floor(t / 60) % 60)}:${pad(t % 60)}`;
-}
-const fmtDate = (ts) => new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 const pickMime = () =>
   ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
 function load(key, fallback) {
@@ -85,19 +65,12 @@ function load(key, fallback) {
 function save(key, value) {
   try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
 }
-async function api(path, opts = {}) {
-  const res = await fetch(API + path, opts);
-  const isJson = (res.headers.get('content-type') || '').includes('json');
-  const body = isJson ? await res.json() : await res.text();
-  if (!res.ok) throw new Error((isJson && body.error) || `HTTP ${res.status}`);
-  return body;
-}
 const sessionLock = (id) => `meeting-recorder-session-${id}`;
 
 // ---------------------------------------------------------------------------
 // component
 // ---------------------------------------------------------------------------
-export default function Recorder() {
+export default function Recorder({ active = true, serverDown, refresh, transcribe: startTranscription, onOpenRecording, onLiveChange }) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [status, setStatus] = useState({ text: 'Ready', error: false });
@@ -107,14 +80,8 @@ export default function Recorder() {
   const [model, setModel] = useState(load('rec.model', 'base'));
   const [language, setLanguage] = useState(load('rec.language', 'he'));
   const [autoTranscribe, setAutoTranscribe] = useState(load('rec.auto', '1') === '1');
-  const [recordings, setRecordings] = useState([]);
-  const [folder, setFolder] = useState('');
-  const [progress, setProgress] = useState({});
-  const [serverDown, setServerDown] = useState(false);
   const [source, setSource] = useState(load('rec.source', 'desktop'));
-  const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [copiedPath, setCopiedPath] = useState(false);
+  const [savedId, setSavedId] = useState(null);
 
   const recRef = useRef(null);
   const sysBar = useRef(null);
@@ -131,42 +98,25 @@ export default function Recorder() {
 
   const say = (text, error = false) => setStatus({ text, error });
 
-  const refresh = useCallback(async () => {
-    try {
-      const data = await api('/api/recordings');
-      setRecordings(data.recordings);
-      setFolder(data.dir);
-      setServerDown(false);
-      setLoadFailed(false);
-    } catch {
-      setServerDown(true);
-      setLoadFailed(true);
-    }
-    setLoaded(true);
-  }, []);
-
   const transcribe = useCallback(async (id) => {
     const { model: m, language: l } = settingsRef.current;
     try {
-      await api(`/api/recordings/${encodeURIComponent(id)}/transcribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: m, language: l }),
-      });
+      await startTranscription(id, { model: m, language: l });
     } catch (e) {
       say(`Could not start transcription: ${e.message}`, true);
     }
-  }, []);
+  }, [startTranscription]);
 
   // Upload every finished or orphaned session in the crash buffer.
   // A Web Lock keeps two windows from uploading the same session twice, and
   // sessions still being recorded (they hold their own lock) are skipped.
+  // Resolves to the uploads as [{ session, id }] (crash-buffer id -> server id).
   const flushPending = useCallback(async () => {
     const run = async () => {
       const held = navigator.locks ? (await navigator.locks.query()).held.map((l) => l.name) : [];
       const sessions = new Map((await allSessions()).map((s) => [s.id, s]));
       for (const [id] of await allPartKeys()) if (!sessions.has(id)) sessions.set(id, { id });
-      let uploaded = 0;
+      const uploaded = [];
       for (const s of sessions.values()) {
         if (held.includes(sessionLock(s.id))) continue;
         const parts = await getParts(s.id);
@@ -180,7 +130,7 @@ export default function Recorder() {
         form.append('name', `${recovered ? 'Recovered' : 'Meeting'} ${fmtDate(s.id)}`);
         const meta = await api('/api/recordings', { method: 'POST', body: form });
         await dropSession(s.id);
-        uploaded++;
+        uploaded.push({ session: s.id, id: meta.id });
         if (settingsRef.current.autoTranscribe) await transcribe(meta.id);
       }
       return uploaded;
@@ -188,20 +138,12 @@ export default function Recorder() {
     return navigator.locks ? navigator.locks.request('meeting-recorder-flush', run) : run();
   }, [transcribe]);
 
-  // initial load + live updates
+  // Upload anything left in the crash buffer from last time.
+  // (The recordings list and live updates come from useRecordings.)
   useEffect(() => {
-    refresh();
     flushPending()
-      .then((n) => { if (n) { say(`Uploaded ${n} unsaved recording${n > 1 ? 's' : ''} from last time.`); refresh(); } })
+      .then(({ length: n }) => { if (n) { say(`Uploaded ${n} unsaved recording${n > 1 ? 's' : ''} from last time.`); refresh(); } })
       .catch(() => say('Server offline — unsaved recordings stay in this browser until it is back.', true));
-
-    const socket = io(API);
-    let timer;
-    socket.on('connect', () => { setServerDown(false); refresh(); });
-    socket.on('disconnect', () => setServerDown(true));
-    socket.on('recording-updated', () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
-    socket.on('recording-progress', (p) => setProgress((prev) => ({ ...prev, [p.id]: p })));
-    return () => { clearTimeout(timer); socket.disconnect(); };
   }, [refresh, flushPending]);
 
   const loadMics = useCallback(async () => {
@@ -215,6 +157,7 @@ export default function Recorder() {
   // ---------------- recording ----------------
   async function start() {
     if (recRef.current) return;
+    setSavedId(null);
     say('Choose what to share…');
     let display;
     try {
@@ -335,9 +278,10 @@ export default function Recorder() {
     if (rec.releaseLock) rec.releaseLock();
 
     try {
-      await flushPending();
-      say(`Saved · ${fmtDuration(duration)}${settingsRef.current.autoTranscribe ? ' · transcribing in Recordings below' : ''}`);
-      refresh();
+      const uploaded = await flushPending();
+      await refresh();
+      setSavedId(uploaded.find((u) => u.session === rec.id)?.id ?? null);
+      say(`Saved · ${fmtDuration(duration)}${settingsRef.current.autoTranscribe ? ' · transcribing in Recordings' : ''}`);
     } catch (e) {
       say(`Recording kept in this browser — upload failed (${e.message}). It will upload automatically when the server is running.`, true);
     }
@@ -347,7 +291,7 @@ export default function Recorder() {
     const warn = (e) => { if (recRef.current) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
     const key = (e) => {
-      if (e.code === 'Space' && !e.target.closest('input, select, textarea, button, a, audio')) {
+      if (active && e.code === 'Space' && !e.target.closest('input, select, textarea, button, a, audio')) {
         e.preventDefault();
         recRef.current ? stop() : start();
       }
@@ -363,13 +307,8 @@ export default function Recorder() {
   const btnState = saving ? 'saving' : recording ? 'on' : 'idle';
   const btnLabel = saving ? 'Saving…' : recording ? 'Stop and save' : 'Start recording';
 
-  async function copyPath() {
-    try {
-      await navigator.clipboard.writeText(folder);
-      setCopiedPath(true);
-      setTimeout(() => setCopiedPath(false), 2000);
-    } catch { /* clipboard unavailable */ }
-  }
+  const live = saving ? 'uploading' : recording ? 'recording' : null;
+  useEffect(() => { if (onLiveChange) onLiveChange(live); }, [live, onLiveChange]);
 
   const onKeySource = (e) => {
     if (recording) return;
@@ -446,6 +385,9 @@ export default function Recorder() {
           {status.error && <ExclamationCircleIcon className="rec-status-icon" aria-hidden="true" />}
           <span>{status.text}</span>
         </div>
+        {savedId && !status.error && onOpenRecording && (
+          <button type="button" className="ghost-btn small" onClick={() => onOpenRecording(savedId)}>View in Recordings</button>
+        )}
       </div>
 
       {serverDown && (
@@ -487,163 +429,6 @@ export default function Recorder() {
           </div>
         </div>
       </details>
-
-      <section className="rec-history" aria-labelledby="rec-history-title">
-        <div className="rec-history-head">
-          <h2 id="rec-history-title">Recordings</h2>
-          <span className="rec-count">{recordings.length}</span>
-        </div>
-        {folder && (
-          <p className="rec-folder">
-            <span>Saved in <code>{folder}</code></span>
-            <button type="button" className="ghost-btn small" onClick={copyPath}>{copiedPath ? 'Copied ✓' : 'Copy path'}</button>
-          </p>
-        )}
-
-        {!loaded ? (
-          <div className="rec-empty">Loading recordings…</div>
-        ) : loadFailed && recordings.length === 0 ? (
-          <div className="rec-empty">
-            <p>Couldn't load recordings.</p>
-            <button type="button" className="ghost-btn" onClick={refresh}>Try again</button>
-          </div>
-        ) : recordings.length === 0 ? (
-          <div className="rec-empty">No recordings yet. Press Start recording during a meeting — the transcript will appear here.</div>
-        ) : (
-          <ul className="rec-list">
-            {recordings.map((r) => (
-              <RecordingItem key={r.id} rec={r} progress={progress[r.id]} onTranscribe={transcribe} onError={(m) => say(m, true)} onNotice={(m) => say(m)} />
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
-  );
-}
-
-const langName = (code) => (LANGUAGES.find((l) => l.value === code)?.label) || null;
-
-function RecordingItem({ rec, progress, onTranscribe, onError, onNotice }) {
-  const [name, setName] = useState(rec.name);
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(null);
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const id = encodeURIComponent(rec.id);
-  const t = rec.transcript;
-  const running = t && ['queued', 'running'].includes(t.status);
-
-  useEffect(() => setName(rec.name), [rec.name]);
-
-  // Re-fetch the full transcript when it is expanded or changes (finishedAt moves on every new run).
-  useEffect(() => {
-    if (!open || !t || t.status !== 'done') return;
-    let alive = true;
-    fetch(`${API}/api/recordings/${id}/transcript`).then((r) => r.text()).then((s) => alive && setText(s)).catch(() => {});
-    return () => { alive = false; };
-  }, [open, id, t?.status, t?.finishedAt]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function rename() {
-    setEditing(false);
-    const clean = name.trim();
-    if (!clean || clean === rec.name) { setName(rec.name); return; }
-    try {
-      await api(`/api/recordings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: clean }) });
-    } catch (e) { onError(`Rename failed: ${e.message}`); setName(rec.name); }
-  }
-  async function remove() {
-    try {
-      await api(`/api/recordings/${id}`, { method: 'DELETE' });
-      onNotice('Moved to the _deleted folder.');
-    } catch (e) { onError(`Delete failed: ${e.message}`); }
-  }
-  async function cancel() {
-    try { await api(`/api/recordings/${id}/cancel`, { method: 'POST' }); } catch (e) { onError(`Cancel failed: ${e.message}`); }
-  }
-  async function copy() {
-    try {
-      let value = text;
-      if (value == null) value = await (await fetch(`${API}/api/recordings/${id}/transcript`)).text();
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) { onError(`Copy failed: ${e.message}`); }
-  }
-
-  // MediaRecorder WebM has no duration header; make the browser scan it so seeking works.
-  const fixDuration = (e) => {
-    const a = e.currentTarget;
-    if (a.duration === Infinity) {
-      a.currentTime = 1e101;
-      a.addEventListener('timeupdate', () => { a.currentTime = 0; }, { once: true });
-    }
-  };
-
-  const pct = progress?.percent;
-  let chip;
-  if (running) chip = <span className="chip chip-run"><ArrowPathIcon className="chip-icon spin" aria-hidden="true" />{pct != null ? `Transcribing ${pct}%` : (progress?.message || 'Transcribing…')}</span>;
-  else if (t?.status === 'done') chip = <span className="chip chip-done"><CheckCircleIcon className="chip-icon" aria-hidden="true" />Transcribed</span>;
-  else if (t?.status === 'error') chip = <span className="chip chip-err"><ExclamationCircleIcon className="chip-icon" aria-hidden="true" />Failed</span>;
-  else if (t?.status === 'interrupted') chip = <span className="chip chip-warn"><ExclamationTriangleIcon className="chip-icon" aria-hidden="true" />Interrupted</span>;
-  else if (t?.status === 'cancelled') chip = <span className="chip chip-warn"><XMarkIcon className="chip-icon" aria-hidden="true" />Cancelled</span>;
-  else chip = <span className="chip"><ClockIcon className="chip-icon" aria-hidden="true" />Not transcribed</span>;
-
-  const retry = ['error', 'interrupted', 'cancelled'].includes(t?.status);
-  const lang = langName(t?.language);
-  const preview = open ? (text == null ? 'Loading…' : (text || '(no speech detected)')) : (t?.preview ? `${t.preview}${t.chars > t.preview.length ? '…' : ''}` : '');
-
-  return (
-    <li className="rec-item">
-      <div className="rec-item-top">
-        {editing ? (
-          <input
-            className="rec-name"
-            value={name}
-            dir="auto"
-            autoFocus
-            aria-label="Recording name"
-            onChange={(e) => setName(e.target.value)}
-            onBlur={rename}
-            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setName(rec.name); setEditing(false); } }}
-          />
-        ) : (
-          <>
-            <h3 className="rec-title" dir="auto">{rec.name}</h3>
-            <button type="button" className="icon-btn" aria-label="Rename" title="Rename" onClick={() => setEditing(true)}><PencilSquareIcon aria-hidden="true" /></button>
-          </>
-        )}
-      </div>
-      <div className="rec-meta">{fmtDate(rec.created)} · {fmtDuration(rec.duration)}{lang ? ` · ${lang}` : ''}</div>
-      <div className="rec-chip-row">
-        {chip}
-        {running && (
-          <>
-            <div className="rec-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} aria-label="Transcription progress"><b style={{ width: `${pct || 0}%` }} /></div>
-            <button type="button" className="ghost-btn small" onClick={cancel}>Stop</button>
-          </>
-        )}
-        {retry && <button type="button" className="ghost-btn small" onClick={() => onTranscribe(rec.id)}>Try again</button>}
-        {!t && <button type="button" className="ghost-btn small" onClick={() => onTranscribe(rec.id)}>Transcribe</button>}
-      </div>
-      {t?.status === 'error' && t.error && <p className="rec-error">{t.error}</p>}
-      <audio className="rec-audio" controls preload="none" src={`${API}/api/recordings/${id}/audio`} onLoadedMetadata={fixDuration} />
-      {t?.status === 'done' && preview && (
-        <>
-          <p className={`rec-preview ${open ? 'open' : ''}`} dir="auto">{preview}</p>
-          <button type="button" className="link-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? 'Show less' : 'Show full transcript'}</button>
-        </>
-      )}
-      <div className="rec-actions">
-        {t?.status === 'done' && (
-          <>
-            <button type="button" className="primary-btn" onClick={copy}>{copied ? 'Copied ✓' : 'Copy text'}</button>
-            <a className="ghost-btn" href={`${API}/api/recordings/${id}/transcript?download=1`}><ArrowDownTrayIcon aria-hidden="true" />Download .txt</a>
-          </>
-        )}
-        <a className="ghost-btn" href={`${API}/api/recordings/${id}/audio?download=1`}><ArrowDownTrayIcon aria-hidden="true" />Download audio</a>
-        {t && !running && !retry && <button type="button" className="ghost-btn" onClick={() => onTranscribe(rec.id)}><ArrowPathIcon aria-hidden="true" />Transcribe again</button>}
-        <button type="button" className="ghost-btn danger" onClick={remove} disabled={running}><TrashIcon aria-hidden="true" />Delete</button>
-      </div>
-    </li>
   );
 }

@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
 import axios from 'axios';
-import io from 'socket.io-client';
 import Recorder from './Recorder';
+import Recordings from './Recordings';
+import useRecordings from './useRecordings';
 import { API } from './api';
 import {
   ArrowUpTrayIcon,
@@ -14,9 +15,17 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 
+const TABS = [
+  { id: 'record', label: 'Record' },
+  { id: 'recordings', label: 'Recordings' },
+  { id: 'file', label: 'Transcribe a file' },
+];
+
 function App() {
   const [tab, setTab] = useState(() => {
-    try { return localStorage.getItem('app.tab') || 'record'; } catch { return 'record'; }
+    let saved = null;
+    try { saved = localStorage.getItem('app.tab'); } catch { /* storage unavailable */ }
+    return TABS.some((t) => t.id === saved) ? saved : 'record';
   });
   useEffect(() => {
     try { localStorage.setItem('app.tab', tab); } catch { /* storage unavailable */ }
@@ -32,8 +41,13 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [selectedModel, setSelectedModel] = useState('base');
   const [streamingSegments, setStreamingSegments] = useState([]);
+  // Recordings screen state lives here so the Record tab can open a recording in it.
+  const [selectedId, setSelectedId] = useState(null);
+  const [recView, setRecView] = useState('list');
+  const [live, setLive] = useState(null);
+  const recordingsData = useRecordings();
+  const { socket } = recordingsData;
   const fileInputRef = useRef(null);
-  const socketRef = useRef(null);
   const transcriptionBoxRef = useRef(null);
   // Stable per-tab id. Unlike socket.id it survives reconnects, so the server
   // can keep routing live updates to us after a dropped-and-restored socket.
@@ -43,18 +57,18 @@ function App() {
       : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
 
-  // Initialize WebSocket connection
+  // Live file-transcription updates over the shared socket (owned by useRecordings).
   useEffect(() => {
-    socketRef.current = io(API);
+    if (!socket) return;
 
-    socketRef.current.on('connect', () => {
-      console.log('[✓] WebSocket connected:', socketRef.current.id);
+    const onConnect = () => {
+      console.log('[✓] WebSocket connected:', socket.id);
       // Re-register our stable clientId on every (re)connect so the server
       // re-joins us to our room and live updates resume after a blip.
-      socketRef.current.emit('register', clientIdRef.current);
-    });
+      socket.emit('register', clientIdRef.current);
+    };
 
-    socketRef.current.on('transcription-update', (data) => {
+    const onUpdate = (data) => {
       console.log('[↓] Received update:', data);
       
       if (data.type === 'status' || data.type === 'info') {
@@ -100,31 +114,37 @@ function App() {
         setLoading(false);
         setProgress(0);
       }
-    });
+    };
 
-    socketRef.current.on('disconnect', (reason) => {
+    const onDisconnect = (reason) => {
       // A dropped progress socket no longer cancels the job — the server keeps
       // transcribing and delivers the result over the HTTP response. socket.io
       // auto-reconnects, and our 'connect' handler re-registers to resume the
       // live segment stream, so there's nothing to do here but log.
       console.log('[✗] WebSocket disconnected:', reason, '— job keeps running, auto-reconnecting');
-    });
+    };
 
-    socketRef.current.on('transcription-cancelled', (data) => {
+    const onCancelled = (data) => {
       console.log('[!] Transcription cancelled');
       setLoading(false);
       setError(data.message || 'Transcription cancelled by user');
       setProgress(0);
       setStreamingSegments([]);
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('transcription-update', onUpdate);
+    socket.on('disconnect', onDisconnect);
+    socket.on('transcription-cancelled', onCancelled);
+    if (socket.connected) onConnect();
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      socket.off('connect', onConnect);
+      socket.off('transcription-update', onUpdate);
+      socket.off('disconnect', onDisconnect);
+      socket.off('transcription-cancelled', onCancelled);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [socket]);
 
   // Server status pill: poll health every 10 s.
   useEffect(() => {
@@ -146,17 +166,30 @@ function App() {
   }, []);
 
   const onTabKey = (e) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const i = TABS.findIndex((t) => t.id === tab);
+    let n;
+    if (e.key === 'ArrowRight') n = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft') n = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = TABS.length - 1;
+    else return;
     e.preventDefault();
-    const next = tab === 'record' ? 'file' : 'record';
+    const next = TABS[n].id;
     setTab(next);
     const el = document.getElementById(`tab-${next}`);
     if (el) el.focus();
   };
 
+  const openRecording = useCallback((id) => {
+    setSelectedId(id);
+    setRecView('detail');
+    setTab('recordings');
+  }, []);
+  const goRecord = useCallback(() => setTab('record'), []);
+
   const handleCancelTranscription = () => {
-    if (socketRef.current && loading) {
-      socketRef.current.emit('cancel-transcription');
+    if (socket && loading) {
+      socket.emit('cancel-transcription');
       setLoading(false);
       setProgress(0);
       setProgressMessage('');
@@ -331,7 +364,7 @@ function App() {
 
   return (
     <div className="App">
-      <div className="container">
+      <div className={`container ${tab === 'recordings' ? 'wide' : ''}`}>
         <header className="header">
           <h1>Meeting Transcriber</h1>
           <span className={`status-pill ${health.ok === false ? 'down' : health.ok ? 'up' : 'wait'}`} role="status">
@@ -341,16 +374,38 @@ function App() {
         </header>
 
         <div className="tabs" role="tablist" aria-label="Mode">
-          <button type="button" role="tab" id="tab-record" aria-selected={tab === 'record'} aria-controls="panel-main" tabIndex={tab === 'record' ? 0 : -1} className={`tab ${tab === 'record' ? 'active' : ''}`} onClick={() => setTab('record')} onKeyDown={onTabKey}>
-            Record meeting
-          </button>
-          <button type="button" role="tab" id="tab-file" aria-selected={tab === 'file'} aria-controls="panel-main" tabIndex={tab === 'file' ? 0 : -1} className={`tab ${tab === 'file' ? 'active' : ''}`} onClick={() => setTab('file')} onKeyDown={onTabKey}>
-            Transcribe a file
-          </button>
+          {TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)} onKeyDown={onTabKey}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <div role="tabpanel" id="panel-main" aria-labelledby={`tab-${tab}`} className="tab-panel">
-        {tab === 'record' ? <Recorder /> : (<>
+        {/* All panels stay mounted (hidden when inactive) so a recording in progress survives tab switches. */}
+        <div role="tabpanel" id="panel-record" aria-labelledby="tab-record" className="tab-panel" hidden={tab !== 'record'}>
+          <Recorder
+            active={tab === 'record'}
+            serverDown={recordingsData.serverDown}
+            refresh={recordingsData.refresh}
+            transcribe={recordingsData.transcribe}
+            onOpenRecording={openRecording}
+            onLiveChange={setLive}
+          />
+        </div>
+
+        <div role="tabpanel" id="panel-recordings" aria-labelledby="tab-recordings" className="tab-panel" hidden={tab !== 'recordings'}>
+          <Recordings
+            data={recordingsData}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            view={recView}
+            onView={setRecView}
+            onGoRecord={goRecord}
+            live={live}
+          />
+        </div>
+
+        <div role="tabpanel" id="panel-file" aria-labelledby="tab-file" className="tab-panel" hidden={tab !== 'file'}>
 
         {!file && (
           <div className="field model-field">
@@ -471,7 +526,6 @@ function App() {
         {!file && !transcription && (
           <p className="info-footer">Private and free. Runs locally on this computer.</p>
         )}
-        </>)}
         </div>
       </div>
     </div>
