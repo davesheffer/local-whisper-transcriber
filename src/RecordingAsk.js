@@ -53,6 +53,7 @@ export default function RecordingAsk({ rec, text, lang, ai, thread, onAnswer }) 
       <AiGate ai={ai} what="Questions about the meeting" />
       {!done && <p className="recs-transcript-empty">You can ask questions once the recording is transcribed.</p>}
 
+      <div className="ask-scroll">
       {(thread.length > 0 || busy) && (
         <ol className="ask-thread" aria-label="Questions and answers">
           {thread.map((m, i) => (
@@ -72,6 +73,7 @@ export default function RecordingAsk({ rec, text, lang, ai, thread, onAnswer }) 
         </ol>
       )}
       <div ref={endRef} />
+      </div>
       {error && <p className="rec-error" role="alert">{error}</p>}
 
       {ready && (
