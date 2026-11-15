@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDownTrayIcon,
   ArrowLeftIcon,
@@ -14,8 +14,14 @@ import {
 } from '@heroicons/react/24/outline';
 import './Recorder.css';
 import './Recordings.css';
+import './RecordingAi.css';
 
 import { API } from './api';
+import { buildMarkdown, normLang, sha256 } from './ai/builtin';
+import { resolveLang, transcriptFor, useAiStatus } from './aiNotes';
+import RecordingAsk from './RecordingAsk';
+import RecordingNotes from './RecordingNotes';
+import RecordingTranscript from './RecordingTranscript';
 import { fmtDate, fmtDuration, langName } from './useRecordings';
 
 const NARROW = '(max-width: 719px)';
@@ -36,7 +42,7 @@ function StatusChip({ rec, progress }) {
 // Recordings screen: searchable list on the left, selected recording on the right.
 // On narrow screens only one pane shows at a time (`view` = 'list' | 'detail').
 // ---------------------------------------------------------------------------
-export default function Recordings({ data, selectedId, onSelect, view, onView, onGoRecord, live }) {
+export default function Recordings({ data, selectedId, onSelect, view, onView, onGoRecord, live, auto }) {
   const { recordings, folder, progress, serverDown, loaded, loadFailed, refresh } = data;
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(null);
@@ -61,7 +67,7 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
 
   const q = query.trim().toLowerCase();
   const shown = q
-    ? recordings.filter((r) => `${r.name} ${r.transcript?.preview || ''}`.toLowerCase().includes(q))
+    ? recordings.filter((r) => `${r.name} ${r.transcript?.preview || ''} ${r.summary?.title || ''} ${r.summary?.tldr || ''}`.toLowerCase().includes(q))
     : recordings;
   const selected = recordings.find((r) => r.id === selectedId) || null;
 
@@ -207,6 +213,7 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
             rec={selected}
             progress={progress[selected.id]}
             actions={data}
+            auto={auto}
             onError={(m) => say(m, true)}
             onNotice={(m) => say(m)}
           />
@@ -218,26 +225,112 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
   );
 }
 
+const SUBTABS = [
+  { id: 'notes', label: 'Notes' },
+  { id: 'transcript', label: 'Transcript' },
+  { id: 'ask', label: 'Ask' },
+];
+let lastSubtab = 'notes';
+const EMPTY_PENDING = { qa: [], translations: {}, translationsHash: null };
+
 // The former Recorder history item, shown as a full detail pane.
-function RecordingDetail({ rec, progress, actions, onError, onNotice }) {
-  const { transcribe, rename: renameRecording, remove: removeRecording, cancel: cancelTranscription, fetchTranscript, refresh } = actions;
+function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
+  const {
+    transcribe, rename: renameRecording, remove: removeRecording, cancel: cancelTranscription, fetchTranscript, refresh,
+    getSegments, getSummary, saveSummary, saveTranscript,
+  } = actions;
   const [name, setName] = useState(rec.name);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(null);
+  const [segments, setSegments] = useState(undefined); // undefined = loading, null = none
+  const [summary, setSummary] = useState(undefined); // undefined = loading, null = none
+  const summaryRef = useRef(null);
+  // Q&A / translations kept in memory while the recording has no summary file yet;
+  // they are merged into the summary when notes are generated.
+  const [pending, setPending] = useState(EMPTY_PENDING);
+  const [hash, setHash] = useState(null);
+  const [detected, setDetected] = useState(null);
+  const [sub, setSub] = useState(lastSubtab);
   const [copied, setCopied] = useState(false);
+  const audioRef = useRef(null);
+  const pendingSeek = useRef(null);
   const id = encodeURIComponent(rec.id);
   const t = rec.transcript;
   const running = t && ['queued', 'running'].includes(t.status);
+  const declared = normLang(t?.language);
+  const lang = detected || (declared && declared !== 'auto' ? declared : null);
+  const ai = useAiStatus(lang || 'en');
 
   useEffect(() => setName(rec.name), [rec.name]);
 
-  // Re-fetch the full transcript when it changes (finishedAt moves on every new run).
+  // Re-fetch the full transcript and its segments when it changes
+  // (finishedAt moves on every new run; edited flips after a save elsewhere).
   useEffect(() => {
     if (!t || t.status !== 'done') return;
     let alive = true;
     fetchTranscript(rec.id).then((s) => alive && setText(s)).catch(() => {});
+    getSegments(rec.id).then((s) => alive && setSegments(Array.isArray(s) ? s : null)).catch((e) => {
+      console.error('[ai] loading segments failed', e);
+      if (alive) setSegments(null);
+    });
     return () => { alive = false; };
-  }, [rec.id, t?.status, t?.finishedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rec.id, t?.status, t?.finishedAt, t?.edited]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Summary file: on open and whenever the list reports a newer one.
+  useEffect(() => {
+    let alive = true;
+    getSummary(rec.id).then((s) => {
+      if (!alive) return;
+      const value = s && typeof s === 'object' ? s : null;
+      summaryRef.current = value;
+      setSummary(value);
+    }).catch((e) => {
+      console.error('[ai] loading the summary failed', e);
+      if (alive && summaryRef.current === null) setSummary(null);
+    });
+    return () => { alive = false; };
+  }, [rec.id, rec.summary?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Hash (stale-notes check) and language of the current transcript.
+  useEffect(() => {
+    if (text == null) return undefined;
+    let alive = true;
+    sha256(text).then((h) => alive && setHash(h)).catch((e) => console.error('[ai] sha256 failed', e));
+    resolveLang(t?.language, text).then((l) => alive && setDetected(l)).catch(() => {});
+    return () => { alive = false; };
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply a change to the summary (or the in-memory store when there is none) and save it.
+  const updateStore = useCallback(async (fn) => {
+    const cur = summaryRef.current;
+    if (!cur) { setPending((p) => fn(p)); return; }
+    const next = fn(cur);
+    summaryRef.current = next;
+    setSummary(next);
+    try {
+      await saveSummary(rec.id, next, buildMarkdown(rec, next, transcriptFor(segments, text)));
+    } catch (e) {
+      console.error('[ai] saving the summary failed', e);
+      onError(`Saving the notes file failed: ${e.message}`);
+    }
+  }, [rec, segments, text, saveSummary, onError]);
+
+  function onGenerated(merged) {
+    summaryRef.current = merged;
+    setSummary(merged);
+    setPending(EMPTY_PENDING);
+  }
+  const onTranslation = (target, out, h) => updateStore((s) => ({
+    ...s,
+    translations: { ...(s.translationsHash === h ? s.translations : {}), [target]: out },
+    translationsHash: h,
+  }));
+  const onAnswer = (item) => updateStore((s) => ({ ...s, qa: [...(s.qa || []), item] }));
+  function onTranscriptSaved(body) {
+    setText(body.text);
+    if (body.segments) setSegments(body.segments);
+    onNotice('Transcript saved.');
+  }
 
   async function rename() {
     setEditing(false);
@@ -271,17 +364,59 @@ function RecordingDetail({ rec, progress, actions, onError, onNotice }) {
   }
 
   // MediaRecorder WebM has no duration header; make the browser scan it so seeking works.
+  // A seek requested before that finished is applied once the scan is done.
   const fixDuration = (e) => {
     const a = e.currentTarget;
     if (a.duration === Infinity) {
       a.currentTime = 1e101;
-      a.addEventListener('timeupdate', () => { a.currentTime = 0; }, { once: true });
+      a.addEventListener('timeupdate', () => {
+        const target = pendingSeek.current;
+        pendingSeek.current = null;
+        a.currentTime = target ?? 0;
+        if (target != null) a.play().catch(() => {});
+      }, { once: true });
+    } else if (pendingSeek.current != null) {
+      a.currentTime = pendingSeek.current;
+      pendingSeek.current = null;
     }
+  };
+  const seek = useCallback((sec) => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.readyState < 1 || a.duration === Infinity) {
+      pendingSeek.current = sec;
+      if (a.readyState < 1) a.load();
+      a.play().catch(() => {});
+      return;
+    }
+    a.currentTime = sec;
+    a.play().catch(() => {});
+  }, []);
+
+  function selectSub(next) {
+    lastSubtab = next;
+    setSub(next);
+  }
+  const onSubKey = (e) => {
+    const i = SUBTABS.findIndex((s) => s.id === sub);
+    let n;
+    if (e.key === 'ArrowRight') n = (i + 1) % SUBTABS.length;
+    else if (e.key === 'ArrowLeft') n = (i - 1 + SUBTABS.length) % SUBTABS.length;
+    else if (e.key === 'Home') n = 0;
+    else if (e.key === 'End') n = SUBTABS.length - 1;
+    else return;
+    e.preventDefault();
+    const next = SUBTABS[n].id;
+    selectSub(next);
+    const el = document.getElementById(`rsub-${next}`);
+    if (el) el.focus();
   };
 
   const pct = progress?.percent;
   const retry = ['error', 'interrupted', 'cancelled'].includes(t?.status);
-  const lang = langName(t?.language);
+  const langLabel = langName(t?.language);
+  const store = summary || pending;
+  const thread = (store && Array.isArray(store.qa)) ? store.qa : [];
 
   return (
     <article className="rec-item recs-item">
@@ -304,7 +439,7 @@ function RecordingDetail({ rec, progress, actions, onError, onNotice }) {
           </>
         )}
       </div>
-      <div className="rec-meta">{fmtDate(rec.created)} · {fmtDuration(rec.duration)}{lang ? ` · ${lang}` : ''}</div>
+      <div className="rec-meta">{fmtDate(rec.created)} · {fmtDuration(rec.duration)}{langLabel ? ` · ${langLabel}` : ''}</div>
       <div className="rec-chip-row">
         <StatusChip rec={rec} progress={progress} />
         {running && (
@@ -317,7 +452,7 @@ function RecordingDetail({ rec, progress, actions, onError, onNotice }) {
         {!t && <button type="button" className="ghost-btn small" onClick={retranscribe}>Transcribe</button>}
       </div>
       {t?.status === 'error' && t.error && <p className="rec-error">{t.error}</p>}
-      <audio className="rec-audio" controls preload="none" src={`${API}/api/recordings/${id}/audio`} onLoadedMetadata={fixDuration} />
+      <audio ref={audioRef} className="rec-audio" controls preload="none" src={`${API}/api/recordings/${id}/audio`} onLoadedMetadata={fixDuration} />
       <div className="rec-actions">
         {t?.status === 'done' && (
           <>
@@ -329,14 +464,62 @@ function RecordingDetail({ rec, progress, actions, onError, onNotice }) {
         {t && !running && !retry && <button type="button" className="ghost-btn" onClick={retranscribe}><ArrowPathIcon aria-hidden="true" />Transcribe again</button>}
         <button type="button" className="ghost-btn danger" onClick={remove} disabled={running}><TrashIcon aria-hidden="true" />Delete</button>
       </div>
-      <h4 className="recs-transcript-title">Transcript</h4>
-      {t?.status === 'done' ? (
-        <div className="recs-transcript" dir="auto">{text == null ? 'Loading…' : (text || '(no speech detected)')}</div>
-      ) : (
-        <p className="recs-transcript-empty">
-          {running ? 'Transcribing — the text will appear here when it is done.' : 'No transcript yet.'}
-        </p>
-      )}
+
+      <div className="subtabs" role="tablist" aria-label="Recording sections">
+        {SUBTABS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            id={`rsub-${s.id}`}
+            aria-selected={sub === s.id}
+            aria-controls={`rsubpanel-${s.id}`}
+            tabIndex={sub === s.id ? 0 : -1}
+            className={`subtab ${sub === s.id ? 'active' : ''}`}
+            onClick={() => selectSub(s.id)}
+            onKeyDown={onSubKey}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {/* Panels stay mounted so a running answer or translation survives tab switches. */}
+      <div role="tabpanel" id="rsubpanel-notes" aria-labelledby="rsub-notes" className="subtab-panel" hidden={sub !== 'notes'}>
+        <RecordingNotes
+          rec={rec}
+          text={text}
+          segments={segments}
+          lang={lang}
+          hash={hash}
+          summary={t?.status === 'done' || summary ? summary : null}
+          pending={pending}
+          ai={ai}
+          auto={auto}
+          actions={{ saveSummary, rename: renameRecording }}
+          onGenerated={onGenerated}
+          onError={onError}
+        />
+      </div>
+      <div role="tabpanel" id="rsubpanel-transcript" aria-labelledby="rsub-transcript" className="subtab-panel" hidden={sub !== 'transcript'}>
+        <RecordingTranscript
+          rec={rec}
+          text={text}
+          segments={segments}
+          running={running}
+          audioRef={audioRef}
+          onSeek={seek}
+          lang={lang}
+          store={store}
+          hash={hash}
+          onTranslation={onTranslation}
+          saveTranscript={saveTranscript}
+          onSaved={onTranscriptSaved}
+          onError={onError}
+        />
+      </div>
+      <div role="tabpanel" id="rsubpanel-ask" aria-labelledby="rsub-ask" className="subtab-panel" hidden={sub !== 'ask'}>
+        <RecordingAsk rec={rec} text={text} lang={lang} ai={ai} thread={thread} onAnswer={onAnswer} />
+      </div>
     </article>
   );
 }

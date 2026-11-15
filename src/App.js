@@ -4,6 +4,7 @@ import axios from 'axios';
 import Recorder from './Recorder';
 import Recordings from './Recordings';
 import useRecordings from './useRecordings';
+import useAutoSummarize from './useAutoSummarize';
 import { API } from './api';
 import {
   ArrowUpTrayIcon,
@@ -46,6 +47,8 @@ function App() {
   const [recView, setRecView] = useState('list');
   const [live, setLive] = useState(null);
   const recordingsData = useRecordings();
+  // Background AI notes for recordings that finish transcribing while the app is open.
+  const autoSummary = useAutoSummarize(recordingsData);
   const { socket } = recordingsData;
   const fileInputRef = useRef(null);
   const transcriptionBoxRef = useRef(null);
@@ -402,6 +405,7 @@ function App() {
             onView={setRecView}
             onGoRecord={goRecord}
             live={live}
+            auto={autoSummary}
           />
         </div>
 

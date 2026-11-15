@@ -26,15 +26,25 @@ export async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);
   const isJson = (res.headers.get('content-type') || '').includes('json');
   const body = isJson ? await res.json() : await res.text();
-  if (!res.ok) throw new Error((isJson && body.error) || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const err = new Error((isJson && body.error) || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return body;
 }
 
-function load(key, fallback) {
+export function load(key, fallback) {
   try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
 }
 
 const recPath = (id) => `/api/recordings/${encodeURIComponent(id)}`;
+const orNull = (e) => { if (e.status === 404) return null; throw e; };
+const putJson = (path, body) => api(path, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
 
 // ---------------------------------------------------------------------------
 // The one socket.io connection for the app, plus the recordings list,
@@ -95,8 +105,17 @@ export default function useRecordings() {
   const cancel = useCallback((id) => api(`${recPath(id)}/cancel`, { method: 'POST' }), []);
   const fetchTranscript = useCallback(async (id) => (await fetch(`${API}${recPath(id)}/transcript`)).text(), []);
 
+  // Segments, transcript edits and AI notes (404 = none yet → null).
+  const getSegments = useCallback((id) => api(`${recPath(id)}/segments`).catch(orNull), []);
+  const saveTranscript = useCallback((id, { text, segments }) => putJson(`${recPath(id)}/transcript`,
+    segments ? { text, segments } : { text }), []);
+  const getSummary = useCallback((id) => api(`${recPath(id)}/summary`).catch(orNull), []);
+  const saveSummary = useCallback((id, summary, markdown) => putJson(`${recPath(id)}/summary`, { summary, markdown }), []);
+  const deleteSummary = useCallback((id) => api(`${recPath(id)}/summary`, { method: 'DELETE' }), []);
+
   return {
     socket, recordings, folder, progress, serverDown, loaded, loadFailed,
     refresh, transcribe, rename, remove, cancel, fetchTranscript,
+    getSegments, saveTranscript, getSummary, saveSummary, deleteSummary,
   };
 }
