@@ -1,0 +1,67 @@
+{
+  "id": "dec_aa60cb5d59",
+  "title": "Persist meeting recordings locally in IndexedDB parts, with upload as fallback",
+  "topic": null,
+  "status": "accepted",
+  "context": "The input does not state the motive. The commit adds a meeting recorder that captures Chrome tab/system audio and microphone, with live meters, upload, and auto-transcribe. Its body says uploads have a 'local fallback', and the structured changes add IndexedDB helpers (idb, putSession, allSessions, putPart, partsRange). Together these point to recordings being kept on the device, but src/Recorder.js is not in the shown diff, so the write path is inferred from names.",
+  "decision": "Recording audio is stored in the browser's IndexedDB, as sessions and parts, and the upload to the server is a fallback path. The recordings history, playback, rename, re-transcribe and delete work from this local store. The shown code does not confirm whether parts are written during capture or only at stop.",
+  "consequences": [
+    "Recordings can survive a failed or interrupted upload, since a local copy exists.",
+    "History, playback and re-transcribe read from the browser store, so they are per-browser and per-origin.",
+    "Storage limits and cleanup now depend on the browser's IndexedDB quota, which the input does not address.",
+    "Upload and transcription logic is split between the local store and the server API in src/api.js, which now uses a same-origin base in production."
+  ],
+  "alternatives_rejected": [
+    "Replaces the earlier hardcoded per-component colours in App.css (such as #667eea and white cards) with shared light/dark design tokens on :root. This is a different approach to theming, not a rejected feature."
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Replaces the earlier hardcoded per-component colours in App.css (such as #667eea and white cards) with shared light/dark design tokens on :root. This is a different approach to theming, not a rejected feature.",
+      "scope": [
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/App.js",
+    "src/Recorder.js",
+    "src/api.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "52f31a5",
+  "valid_from": "2026-11-15T13:03:32+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:52f31a5",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/App.js",
+      "src/Recorder.js",
+      "src/api.js"
+    ],
+    "last_verified": "2026-11-15T11:03:47.023Z"
+  },
+  "date": "2026-11-15T13:03:32+02:00"
+}
