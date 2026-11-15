@@ -1,0 +1,77 @@
+{
+  "id": "dec_81d4107bdc",
+  "title": "Read stored Q&A at generation end, not start, so mid-run saves merge",
+  "topic": null,
+  "status": "accepted",
+  "context": "Notes generation captured the stored summary and pending Q&A when it started. The model can run for a long time, so answers and translations saved meanwhile were overwritten when the merged result was saved. Auto-title and save ordering had similar races: an older summary PUT could land last, and a rename during generation could be overwritten by the auto-title.",
+  "decision": "generateAndSave now accepts `existing` and `pending` as either values or getter functions, and reads them after summarize() finishes. RecordingDetail passes a `getStore` getter that returns the live summaryRef and pendingRef, which are kept in refs so they are current. Summary saves are chained through `saveSerial`, so PUTs run one after another. Auto-title re-checks the recording's current name (`autoRename`) before renaming. Leaving a recording aborts its notes generation.",
+  "consequences": [
+    "Q&A and translations saved while the model runs are merged into the result, not lost.",
+    "Notes generation depends on a ref-backed store; `pendingRef` and `summaryRef` must stay in sync with state updates (`onGenerated` resets both).",
+    "Summary saves are serialized, which adds latency to rapid successive edits. A failed save does not block later ones, because the chain catches errors.",
+    "Leaving a recording now aborts its notes generation, so a generation in progress is discarded when the user navigates away.",
+    "generateAndSave keeps accepting plain values, so callers that do not pass getters keep the snapshot behavior."
+  ],
+  "alternatives_rejected": [
+    "Snapshotting `summary` and `pending` when generation starts (the previous `existing: summary || null, pending` arguments), which the change replaces with getters."
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Snapshotting `summary` and `pending` when generation starts (the previous `existing: summary || null, pending` arguments), which the change replaces with getters.",
+      "scope": [
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [
+          "summary",
+          "pending"
+        ],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/RecordingNotes.js",
+    "src/RecordingTranscript.js",
+    "src/Recordings.js",
+    "src/aiNotes.js",
+    "src/useAutoSummarize.js",
+    "src/useRecordings.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "8ae9472",
+  "valid_from": "2026-11-15T14:12:17+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:8ae9472",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/RecordingNotes.js",
+      "src/RecordingTranscript.js",
+      "src/Recordings.js",
+      "src/aiNotes.js",
+      "src/useAutoSummarize.js",
+      "src/useRecordings.js"
+    ],
+    "last_verified": "2026-11-15T12:12:30.579Z"
+  },
+  "date": "2026-11-15T14:12:17+02:00"
+}

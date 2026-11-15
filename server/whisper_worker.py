@@ -227,6 +227,8 @@ def run_transcription(model, job):
     job_id = job.get("jobId")
     file_path = job["file"]
     language = job.get("language") or "he"
+    if language == "auto":
+        language = None  # faster-whisper detects the language
     started = time.perf_counter()
     first_segment_seconds = None
 

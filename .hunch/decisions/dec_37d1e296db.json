@@ -1,0 +1,49 @@
+{
+  "id": "dec_37d1e296db",
+  "title": "Make the app installable as a PWA with a network-first service worker",
+  "topic": null,
+  "status": "accepted",
+  "context": "The app needed to be installable as a PWA. The service worker comment also says the window should open even while the local server is starting. The commit adds a web manifest, icons, and a service worker, and registers the worker only in production builds.",
+  "decision": "Add public/manifest.json (standalone display, #667eea theme, two icons) and public/sw.js, a minimal network-first service worker. src/index.js registers /sw.js on window load, only when NODE_ENV is production. The worker caches same-origin GET responses and falls back to cache when the network fails. Requests under /api/ and /socket.io/ are passed through uncached.",
+  "consequences": [
+    "Online requests always go to the network first, so a rebuilt app is picked up on the next load; the cache is used only when the fetch fails.",
+    "The worker calls skipWaiting and clients.claim, so a new worker activates immediately and deletes old caches whose names differ from transcriber-shell-v1.",
+    "Offline navigation falls back to the cached '/' page; other offline requests with no cache entry get Response.error().",
+    "The worker is not registered in development builds, so PWA behavior can only be exercised in production.",
+    "The code excludes only /api/ and /socket.io/. The sw.js comment says audio requests are also never touched, but no audio path is excluded in the shown code, so same-origin audio GETs would be cached.",
+    "Google Fonts is linked from index.html, but the worker ignores cross-origin requests, so the font is not cached for offline use.",
+    "index.html also changes the theme color to #667eea and the title to 'Meeting Transcriber'."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "public/sw.js",
+    "src/index.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "69521f5",
+  "valid_from": "2026-11-15T13:03:35+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:69521f5",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "public/sw.js",
+      "src/index.js"
+    ],
+    "last_verified": "2026-11-15T11:03:47.961Z"
+  },
+  "date": "2026-11-15T13:03:35+02:00"
+}

@@ -1,0 +1,50 @@
+{
+  "id": "dec_872f65cf09",
+  "title": "Bind recordings server to 127.0.0.1 with Host, Origin and socket.io guards",
+  "topic": null,
+  "status": "accepted",
+  "context": "The commit adds /api/recordings (upload, list, audio, transcript, rename, delete, background transcribe and cancel) plus socket.io progress events. The commit body names DNS rebinding as the threat the Host allowlist addresses. The exact attack surface is not described beyond that.",
+  "decision": "The server binds to 127.0.0.1 by default. It enforces a Host allowlist against DNS rebinding, an Origin guard on /api/recordings, and a socket.io allowRequest check. The React build is served from the same origin.",
+  "consequences": [
+    "The recorder is reachable only from the local machine unless the bind address is changed.",
+    "Requests with an unexpected Host header are rejected, so any new hostname for the app must be added to the allowlist.",
+    "Requests to /api/recordings must pass the Origin guard, and socket.io connections must pass allowRequest.",
+    "Serving the UI from the same origin as the API keeps the browser client on one origin."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_3de4f901ff"
+  ],
+  "related_files": [
+    "server/recordings.js",
+    "server/recordings.test.js",
+    "server/server.js",
+    "server/whisper_worker.py"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "2411329",
+  "valid_from": "2026-11-15T12:59:52+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:2411329",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "server/recordings.js",
+      "server/recordings.test.js",
+      "server/server.js",
+      "server/whisper_worker.py"
+    ],
+    "last_verified": "2026-11-15T11:00:04.448Z"
+  },
+  "date": "2026-11-15T12:59:52+02:00"
+}

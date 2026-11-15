@@ -1,0 +1,48 @@
+{
+  "id": "dec_c82151bf3a",
+  "title": "Translate meeting notes on demand per field and cache them in the summary file",
+  "topic": null,
+  "status": "accepted",
+  "context": "Meeting notes are shown in Hebrew or English, and the commit body says the Notes tab needed a language toggle. The commit text does not state a further reason.",
+  "decision": "A Notes-tab toggle translates the summary field by field with Chrome's on-device Translator when first requested. The result is cached in the summary file under notesTranslations, keyed to the summary's createdAt, and the viewer's chosen language is remembered in localStorage. Copy and export use the language on screen.",
+  "consequences": [
+    "Translations are cached in the summary file and keyed to createdAt, so regenerating the summary drops them.",
+    "The toggle appears only when a cached translation exists or the translator is available for the language pair.",
+    "The viewer's language choice lives in localStorage, so it is per browser and not stored in the summary file.",
+    "Each field is translated separately, so the structure survives and owner and due values are kept as they are.",
+    "Translation can be cancelled, which reverts the view to the original language.",
+    "Copy and export produce the language currently on screen."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/RecordingNotes.js",
+    "src/Recordings.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "5d5dc89",
+  "valid_from": "2026-11-15T13:57:12+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:5d5dc89",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/RecordingNotes.js",
+      "src/Recordings.js"
+    ],
+    "last_verified": "2026-11-15T11:57:23.024Z"
+  },
+  "date": "2026-11-15T13:57:12+02:00"
+}

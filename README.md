@@ -4,12 +4,38 @@ A React application for transcribing M4A audio files using OpenAI's Whisper mode
 
 ## Features
 
+- 🎙️ Record Zoom / Google Meet / Teams meetings (system or tab audio + your mic) and transcribe them automatically
+- 🗂️ Recording history on disk: play, rename, re-transcribe, download audio or `.txt`
 - 📁 Drag and drop M4A file support
 - 🎤 Local Whisper AI transcription (no cloud, no API costs)
 - 📋 Copy transcription to clipboard
-- 💎 Beautiful, modern UI
-- ⚡ Fast and responsive
+- 💻 Installs as a Windows app (desktop shortcut, starts with Windows)
 - 🔒 100% Private - audio never leaves your machine
+
+## Install as a Windows app (recommended)
+
+Needs **Python 3.8+**, **Node.js 18+** and **Google Chrome** (or Edge) installed and on `PATH`.
+
+1. Double-click `install.bat` (or run `powershell -ExecutionPolicy Bypass -File install.ps1`). No admin rights needed. It:
+   - installs the Python and Node dependencies (CUDA libraries too if an NVIDIA GPU is found) and builds the app
+   - starts the server hidden at every login (shortcut in your Startup folder)
+   - adds a **Meeting Transcriber** desktop shortcut that opens the app in its own window
+2. Open **Meeting Transcriber** from the desktop. In Chrome you can also use *Install app* in the address bar.
+
+Options: `install.ps1 -Gpu`, `-NoGpu`, `-NoAutostart`, `-NoDesktopShortcut`. Re-run it after `git pull` to update. Run `uninstall.ps1` to remove the shortcuts and autostart; your recordings are kept.
+
+The app is served at http://localhost:5000 and only listens on this computer (`127.0.0.1`). To reach it from your network, set `HOST=0.0.0.0` before starting the server, but anyone on the network can then read your recordings.
+
+### Recording a meeting
+
+1. Open the **Record meeting** tab and press the red button.
+2. Chrome asks what to share:
+   - **Zoom or Teams desktop app:** choose *Entire screen* and tick **Share system audio**.
+   - **Google Meet:** choose the Meet tab and tick **Share tab audio**.
+3. Keep *Record my mic* on to capture your own voice. Use headphones to avoid echo. Only audio is saved, not video.
+4. Press stop. The recording is saved and, with *Auto-transcribe* on, transcribed in the background. The transcript appears in **History**.
+
+Recordings are stored in `Documents\Meeting Recordings`: one audio file, one `.txt` transcript and one `.json` metadata file per meeting. Deleted recordings go to its `_deleted` subfolder. To change the location, set `RECORDINGS_DIR`.
 
 ## Prerequisites
 

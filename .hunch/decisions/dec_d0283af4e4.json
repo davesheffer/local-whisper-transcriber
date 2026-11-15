@@ -1,0 +1,46 @@
+{
+  "id": "dec_d0283af4e4",
+  "title": "On-device Gemini Nano meeting AI; non-English translated through English",
+  "topic": null,
+  "status": "accepted",
+  "context": "Meeting summaries and Q&A need to run locally on Chrome's built-in Gemini Nano (Prompt API). The code comment states that Gemini Nano only reads and writes English on the measured machines, so transcripts in other languages cannot be processed directly.",
+  "decision": "Non-English transcripts are translated to English with the Translator API, prompted in English, and the results are translated back to the transcript language. English transcripts skip translation. Model availability is checked through a single getStatus(lang) that reports one UI state, and the file exposes abort helpers (withAbort, checkAbort, isAbort).",
+  "consequences": [
+    "Non-English use requires two Translator directions (transcript-to-English and English-to-transcript); getStatus checks both and reports the worse availability.",
+    "Translator input is split into chunks of at most 1500 characters (TRANSLATE_CHARS), which is also checked against translator.inputQuota.",
+    "Output quality for non-English meetings depends on two translation passes around the model.",
+    "Both system prompts warn that the transcript comes from speech recognition and may contain errors.",
+    "withAbort rejects as soon as the signal aborts, but the underlying model work may keep running.",
+    "Errors are mapped to friendly UI messages (quota, download permission, unsupported language, network), so raw DOM or parse errors are not shown."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/ai/builtin.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "b6f5a20",
+  "valid_from": "2026-11-15T13:37:08+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:b6f5a20",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/ai/builtin.js"
+    ],
+    "last_verified": "2026-11-15T11:37:20.415Z"
+  },
+  "date": "2026-11-15T13:37:08+02:00"
+}

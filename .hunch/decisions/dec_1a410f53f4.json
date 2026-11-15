@@ -1,0 +1,66 @@
+{
+  "id": "dec_1a410f53f4",
+  "title": "Fix app to viewport height; scroll only the list and detail panes",
+  "topic": null,
+  "status": "accepted",
+  "context": "Before this commit, .App and body used min-height:100vh, so the page itself grew and scrolled. Several panes also capped height with vh units: the recordings list at 70vh, the transcript at 60vh, the transcript edit list at 60vh, and the edit textarea at min-height 40vh. The commit body states the goal: the app fills the viewport, the page never scrolls, and the recordings list, transcript, notes and Ask thread scroll inside their panes.",
+  "decision": "The page is locked to the viewport: html, body and #root are height 100%, body has overflow:hidden, and .App is 100vh/100dvh with overflow:hidden. A flex chain with min-height:0 and flex:1 1 auto runs from the container through the tab panel, the recordings split (.recs), the list pane, and the detail pane (.recs-detail, .recs-item) into the transcript, notes and Ask regions. Each of those regions is the scroll container. RecordingAsk.js wraps the Ask thread and its endRef in a new .ask-scroll div, which becomes the scrolling region. The vh max-heights are removed in favor of flex sizing.",
+  "consequences": [
+    "The page no longer scrolls; scrolling happens only inside the list, transcript, notes, Ask and edit-list regions.",
+    "Short panels (#panel-record, #panel-file, .recs-solo) get overflow-y:auto as a safety net, so content that does not fit scrolls inside the panel rather than the page.",
+    "On phones at 480px and below, .subtab-panel gets min-height max(320px, 60dvh) so the detail card can scroll the header away and the list keeps a usable height.",
+    "The transcript edit textarea changes from min-height 40vh to flex-grown with min-height 120px and resize:none.",
+    "The .App outer padding drops from 32px 16px to 16px, and the small-screen padding changes from 12px 8px to 12px 16px.",
+    "The 480px-breakpoint rule that set .recs-list max-height:none is removed. The phone list layout is now governed by the flex chain.",
+    "The flex chain is fragile: any new wrapper between the viewport and a scroll region must also carry min-height:0 and flex sizing, or it will overflow instead of scrolling."
+  ],
+  "alternatives_rejected": [
+    "Fixed vh-based max-heights on the recordings list (70vh), transcript (60vh) and transcript edit list (60vh), plus min-height:100vh on the page, are replaced by flex sizing that fills the remaining viewport height."
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Fixed vh-based max-heights on the recordings list (70vh), transcript (60vh) and transcript edit list (60vh), plus min-height:100vh on the page, are replaced by flex sizing that fills the remaining viewport height.",
+      "scope": [
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/RecordingAsk.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "86e0355",
+  "valid_from": "2026-11-15T13:47:25+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:86e0355",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/RecordingAsk.js"
+    ],
+    "last_verified": "2026-11-15T11:47:42.335Z"
+  },
+  "date": "2026-11-15T13:47:25+02:00"
+}

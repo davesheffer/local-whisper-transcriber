@@ -1,0 +1,44 @@
+{
+  "id": "dec_daedbf7ae0",
+  "title": "Document Windows installer with localhost-only server and meeting recording",
+  "topic": null,
+  "status": "accepted",
+  "context": "The commit body gives no rationale. The README covered only the M4A drag-and-drop workflow. This change documents a new Windows install path and a meeting-recording feature, and it removes the vague 'Beautiful, modern UI' and 'Fast and responsive' bullets. The install scripts (install.bat, install.ps1, uninstall.ps1) are not in this diff, so their behavior is known only from the README text.",
+  "decision": "The README now presents a per-user Windows install (install.bat or install.ps1, no admin rights) as the recommended path. It installs dependencies and builds the app, starts the server hidden at each login through a Startup-folder shortcut, and adds a desktop shortcut that opens the app in its own window. The server listens only on 127.0.0.1 by default, and network access requires an explicit HOST=0.0.0.0 override. Meeting recordings are documented as audio-only files saved under Documents\\Meeting Recordings.",
+  "consequences": [
+    "The server runs at every login by default, so users must run uninstall.ps1 to stop autostart. Options -NoAutostart and -NoDesktopShortcut let them opt out at install time.",
+    "Binding to 127.0.0.1 keeps recordings private by default. The README warns that HOST=0.0.0.0 exposes them to anyone on the network.",
+    "Recordings live in a user-visible Documents folder and survive uninstall. Deletions move to a _deleted subfolder, and RECORDINGS_DIR changes the location.",
+    "Updating means re-running the installer after git pull.",
+    "Meeting capture depends on Chrome or Edge screen and tab audio sharing, and on the user ticking the audio option. The README lists per-app steps for Zoom or Teams desktop and for Google Meet.",
+    "Documented prerequisites are Python 3.8+, Node.js 18+ and Chrome or Edge on PATH. The install script can add CUDA libraries if it finds an NVIDIA GPU."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [],
+  "related_files": [
+    "README.md"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "61e3544",
+  "valid_from": "2026-11-15T13:00:10+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:61e3544",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "README.md"
+    ],
+    "last_verified": "2026-11-15T11:00:23.437Z"
+  },
+  "date": "2026-11-15T13:00:10+02:00"
+}

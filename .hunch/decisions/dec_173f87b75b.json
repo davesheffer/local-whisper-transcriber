@@ -1,0 +1,53 @@
+{
+  "id": "dec_173f87b75b",
+  "title": "Store transcript segments and AI summaries as sidecar files per recording",
+  "topic": null,
+  "status": "accepted",
+  "context": "Recordings were stored as one metadata JSON plus a plain transcript text file. The commit adds timed Whisper segments, transcript editing, AI notes, and a backup on re-transcribe. The input does not state an explicit motivation beyond these features.",
+  "decision": "Each recording's extra data is kept as sibling files named by recording id: <id>.segments.json for timed segments, <id>.prev.txt for the previous transcript, and <id>.summary.json and <id>.summary.md for AI notes (the summary JSON is stored as-is). Metadata carries only the transcript flags and summary field. Writes go through a new writeAtomic helper (temp file, then rename). Deletion moves all sidecars into _deleted/ with metadata last, and list() skips sidecar files by checking the id stem against ID_RE. Listing exposes the segments/edited flags and the summary from metadata without reading the sidecar files.",
+  "consequences": [
+    "Listing stays a single metadata read per recording; sidecar files are read only when needed.",
+    "Deleting a recording moves every sidecar into _deleted/, and trashFiles never overwrites earlier trash entries.",
+    "Sidecar naming (<id>.segments.json, <id>.summary.json) relies on ID_RE to keep them out of the metadata listing.",
+    "Transcript text and segments can diverge, since they are separate files; the diff does not show how edits keep them in sync.",
+    "Segment and text sizes are capped (MAX_SEGMENTS = 50000, MAX_TEXT_BYTES = 5 MB).",
+    "Failures return JSON errors, and readJson maps a missing file to a 404.",
+    "The rest of the update() logic, including how .prev.txt is written, is cut off in the input, so its behavior is unverified here."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_3de4f901ff"
+  ],
+  "related_files": [
+    "AGENTS.md",
+    "server/recordings.js",
+    "server/recordings.test.js",
+    "server/server.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "c9c8071",
+  "valid_from": "2026-11-15T13:42:26+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:c9c8071",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "AGENTS.md",
+      "server/recordings.js",
+      "server/recordings.test.js",
+      "server/server.js"
+    ],
+    "last_verified": "2026-11-15T11:42:40.290Z"
+  },
+  "date": "2026-11-15T13:42:26+02:00"
+}

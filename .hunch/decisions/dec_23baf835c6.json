@@ -1,0 +1,83 @@
+{
+  "id": "dec_23baf835c6",
+  "title": "Lift recordings state and one shared socket to App; keep all tabs mounted",
+  "topic": null,
+  "status": "accepted",
+  "context": "The recordings list lived inside the Record tab, and the commit wants a dedicated master-detail Recordings tab with search, status chips, player, actions and full transcript. The commit body says a recording should survive tab switches, and that the app should use one shared socket via useRecordings. App.js previously created its own socket with io(API) in an effect.",
+  "decision": "Recordings data and its socket move into the useRecordings hook, which App calls. App holds the shared socket and the Recordings selection state (selectedId, recView, live) so the Record tab can open a recording via openRecording. The App effect now attaches transcription listeners to that shared socket and removes them on cleanup, instead of creating and disconnecting its own. All tabs stay mounted: CSS `.tab-panel[hidden] { display: none; }` hides inactive panels rather than unmounting them. A `.container.wide` class widens the layout for the master-detail view. Tab keyboard navigation covers all three tabs, including Home and End. The saved tab from localStorage is validated against TABS.",
+  "consequences": [
+    "Recording and transcription state survives tab switches because panels are hidden, not unmounted.",
+    "Only one socket connection is opened for the app, shared by Recorder, Recordings and file transcription.",
+    "App's socket effect now depends on `socket` and removes listeners on cleanup. It no longer disconnects the socket, so the socket's lifecycle belongs to useRecordings.",
+    "The 'View in Recordings' action after a save depends on openRecording lifted into App.",
+    "Hidden panels stay in the DOM and stay mounted, so their work continues in the background while the user is on another tab."
+  ],
+  "alternatives_rejected": [
+    "App-owned socket created in App's effect with io(API) and disconnected on unmount, replaced by the shared socket from useRecordings."
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "App-owned socket created in App's effect with io(API) and disconnected on unmount, replaced by the shared socket from useRecordings.",
+      "scope": [
+        "src/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/App.js",
+    "src/Recorder.js",
+    "src/Recordings.js",
+    "src/useRecordings.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "efe7e86",
+  "valid_from": "2026-11-15T13:16:26+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [
+      "pad",
+      "fmtDuration",
+      "fmtDate",
+      "api",
+      "copyPath",
+      "langName",
+      "RecordingItem",
+      "rename",
+      "remove",
+      "cancel",
+      "copy",
+      "fixDuration"
+    ],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:efe7e86",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "src/App.js",
+      "src/Recorder.js",
+      "src/Recordings.js",
+      "src/useRecordings.js"
+    ],
+    "last_verified": "2026-11-15T11:16:39.358Z"
+  },
+  "date": "2026-11-15T13:16:26+02:00"
+}

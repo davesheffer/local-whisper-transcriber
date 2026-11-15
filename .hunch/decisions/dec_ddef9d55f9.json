@@ -1,0 +1,65 @@
+{
+  "id": "dec_ddef9d55f9",
+  "title": "Ship meeting recorder as installable PWA on existing Node server, not Electron",
+  "topic": null,
+  "status": "accepted",
+  "context": "Need one locally installed app that records Zoom/Google Meet audio (system audio plus mic) and transcribes each recording with the existing local Whisper worker, with a persistent history.",
+  "decision": "Package the app as an installable PWA served by the existing Node server on http://localhost:5000. The server autostarts hidden at Windows login, and the installer adds a desktop shortcut. Electron was rejected for now because it is slower to ship.",
+  "consequences": [
+    "Recording uses Chrome getDisplayMedia for system/tab audio, so the Record tab depends on Chrome.",
+    "The server must run on localhost:5000 and autostart at Windows login (Startup folder).",
+    "Recordings are stored as files on disk (default %USERPROFILE%\\Documents\\Meeting Recordings, overridable via RECORDINGS_DIR); deletes move to _deleted\\ so they are recoverable.",
+    "Installer scripts are Windows-only; non-Windows install scripts and Electron packaging are out of scope.",
+    "Transcription runs as a server background job that survives the HTTP request and keeps the source file."
+  ],
+  "alternatives_rejected": [
+    "Electron packaging (rejected: slower to ship)"
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Electron packaging (rejected: slower to ship)",
+      "scope": [
+        "docs/superpowers/plans/**",
+        "docs/superpowers/specs/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [],
+  "related_files": [
+    "docs/superpowers/plans/2026-11-15-meeting-recorder-app.md",
+    "docs/superpowers/specs/2026-11-15-meeting-recorder-app.md"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "0682bdd",
+  "valid_from": "2026-11-15T12:42:36+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft",
+    "confidence": 0.65,
+    "evidence": [
+      "commit:0682bdd",
+      "synth:provider=claude-cli",
+      "branch:feat/meeting-recorder-app",
+      "docs/superpowers/plans/2026-11-15-meeting-recorder-app.md",
+      "docs/superpowers/specs/2026-11-15-meeting-recorder-app.md"
+    ],
+    "last_verified": "2026-11-15T10:42:48.669Z"
+  },
+  "date": "2026-11-15T12:42:36+02:00"
+}
