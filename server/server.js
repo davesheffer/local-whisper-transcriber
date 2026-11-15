@@ -174,13 +174,16 @@ function handleWorkerMessage(handle, msg) {
   const jobId = msg.jobId;
   if (!jobId) return;
   const job = jobs.get(jobId);
-  if (!job) return;
+  if (!job || job.finishing) return;
 
   // Recording jobs report via recording-progress / recording-updated only, so they
   // never leak into the file tab's transcription-update handler.
   if (!job.recordingId) emitToClient(job.clientId, 'transcription-update', msg);
   if (job.recordingId && (msg.type === 'progress' || msg.type === 'status' || msg.type === 'info')) {
     io.emit('recording-progress', { id: job.recordingId, percent: msg.percent, message: msg.message });
+  }
+  if (job.segments && msg.type === 'segment') {
+    job.segments.push({ start: msg.start_time, end: msg.end_time, text: msg.text });
   }
 
   if (msg.type === 'complete') {
@@ -208,20 +211,28 @@ function handleWorkerMessage(handle, msg) {
 }
 
 // `finalMsg` is the worker message that ended the job (complete/cancelled/error).
+// If onDone returns a promise (recording jobs saving their result), the job stays registered,
+// marked `finishing`, until it settles: findRecordingJob keeps answering 409 to edits meanwhile.
 function finishJob(jobId, finalMsg) {
   const job = jobs.get(jobId);
-  if (!job) return;
+  if (!job || job.finishing) return;
+  job.finishing = true;
   const worker = workers.get(job.modelName);
   if (worker) worker.activeJobIds.delete(jobId);
+  let pending = null;
   if (job.onDone) {
-    try { job.onDone(finalMsg || { type: 'error', error: 'Transcription aborted' }); } catch (e) { console.warn('onDone error:', e.message); }
+    try { pending = job.onDone(finalMsg || { type: 'error', error: 'Transcription aborted' }); } catch (e) { console.warn('onDone error:', e.message); }
   }
   if (job.filePath && !job.keepFile) {
     fs.unlink(job.filePath, (err) => {
       if (err && err.code !== 'ENOENT') console.warn('cleanup error:', err.message);
     });
   }
-  jobs.delete(jobId);
+  if (pending && typeof pending.then === 'function') {
+    Promise.resolve(pending).catch(() => {}).then(() => jobs.delete(jobId));
+  } else {
+    jobs.delete(jobId);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -237,7 +248,12 @@ app.use((req, res, next) => {
   next();
 });
 app.use(cors({ origin: /^http:\/\/localhost:\d+$/ }));
-app.use(express.json());
+// Transcript edits and AI notes can be megabytes: those PUTs get their own 5 MB parser at the
+// route (after the Origin check); every other route keeps the default 100 kb limit.
+const BIG_JSON_ROUTE = /^\/api\/recordings\/[^/]+\/(transcript|summary)\/?$/i;
+const bigJson = express.json({ limit: '5mb' });
+const smallJson = express.json();
+app.use((req, res, next) => (req.method === 'PUT' && BIG_JSON_ROUTE.test(req.path) ? next() : smallJson(req, res, next)));
 
 // Serve the built React app (installable PWA) from the same origin as the API.
 // Without a build (dev: `npm start` on :3000) the plain welcome page below is used.
@@ -407,9 +423,11 @@ function findRecordingJob(recordingId) {
 
 async function transcribeRecording(meta, { model, language, clientId }) {
   const jobId = crypto.randomUUID();
-  const update = (patch) => store.setTranscript(meta.id, patch)
+  const announced = (p) => p
     .then(() => announce(meta.id))
     .catch((e) => console.warn(`[recordings] ${meta.id}: ${e.message}`));
+  const update = (patch) => announced(store.setTranscript(meta.id, patch));
+  const segments = []; // from `segment` messages; written only when the job completes
 
   const worker = getWorker(model);
   jobs.set(jobId, {
@@ -420,14 +438,21 @@ async function transcribeRecording(meta, { model, language, clientId }) {
     modelName: model,
     res: null,
     responded: true,
+    segments,
+    // Returns the store write so finishJob keeps the job registered until it is on disk.
     onDone: (msg) => {
       if (msg.type === 'complete') {
-        update({ status: 'done', text: msg.text || '', detectedLanguage: msg.language || null, finishedAt: Date.now(), error: null });
-      } else if (msg.type === 'cancelled') {
-        update({ status: 'cancelled', finishedAt: Date.now() });
-      } else {
-        update({ status: 'error', error: msg.error || 'Transcription failed', finishedAt: Date.now() });
+        const saved = store.completeTranscript(meta.id, {
+          status: 'done', text: msg.text || '', detectedLanguage: msg.language || null, finishedAt: Date.now(), error: null,
+        }, segments).catch((e) => {
+          // Never leave the recording "running" with no job behind it.
+          console.warn(`[recordings] ${meta.id}: could not save transcript: ${e.message}`);
+          return store.setTranscript(meta.id, { status: 'error', error: 'Could not save transcript', finishedAt: Date.now() });
+        });
+        return announced(saved);
       }
+      if (msg.type === 'cancelled') return update({ status: 'cancelled', finishedAt: Date.now() });
+      return update({ status: 'error', error: msg.error || 'Transcription failed', finishedAt: Date.now() });
     },
   });
   worker.activeJobIds.add(jobId);
@@ -440,7 +465,8 @@ async function transcribeRecording(meta, { model, language, clientId }) {
         io.emit('recording-progress', { id: meta.id, message: `Loading ${model} model (one-time)...` });
         await worker.readyPromise;
       }
-      if (!jobs.has(jobId)) return; // cancelled while the model was loading
+      const job = jobs.get(jobId);
+      if (!job || job.finishing) return; // cancelled while the model was loading
       sendToWorker(worker, { action: 'transcribe', jobId, file: store.audioPath(meta), language });
     } catch (e) {
       finishJob(jobId, { type: 'error', error: e.message });
@@ -495,6 +521,34 @@ app.get('/api/recordings/:id/transcript', wrap(async (req, res) => {
   res.type('text/plain; charset=utf-8').send(text);
 }));
 
+app.get('/api/recordings/:id/segments', wrap(async (req, res) => {
+  res.json(await store.readSegments(req.params.id));
+}));
+
+app.put('/api/recordings/:id/transcript', bigJson, wrap(async (req, res) => {
+  // No await between the check and editTranscript queueing on the recording's lock.
+  if (findRecordingJob(req.params.id)) return res.status(409).json({ error: 'Wait for the transcription to finish before editing' });
+  const meta = await store.editTranscript(req.params.id, req.body);
+  announce(meta.id);
+  res.json({ ok: true });
+}));
+
+app.get('/api/recordings/:id/summary', wrap(async (req, res) => {
+  res.json(await store.readSummary(req.params.id));
+}));
+
+app.put('/api/recordings/:id/summary', bigJson, wrap(async (req, res) => {
+  const meta = await store.putSummary(req.params.id, req.body);
+  announce(meta.id);
+  res.json({ ok: true });
+}));
+
+app.delete('/api/recordings/:id/summary', wrap(async (req, res) => {
+  const meta = await store.deleteSummary(req.params.id);
+  announce(meta.id);
+  res.json({ ok: true });
+}));
+
 app.patch('/api/recordings/:id', wrap(async (req, res) => {
   const meta = await store.rename(req.params.id, req.body && req.body.name);
   announce(meta.id);
@@ -524,11 +578,23 @@ app.post('/api/recordings/:id/cancel', wrap(async (req, res) => {
   const jobId = findRecordingJob(meta.id);
   if (!jobId) return res.status(404).json({ error: 'No transcription running' });
   const job = jobs.get(jobId);
+  if (job.finishing) return res.json({ ok: true }); // already ended; its result is being saved
   const w = workers.get(job.modelName);
   if (w && w.ready) sendToWorker(w, { action: 'cancel', jobId });
   else finishJob(jobId, { type: 'cancelled' }); // still loading the model: nothing queued yet
   res.json({ ok: true });
 }));
+
+// Errors that escape a route (body-parser, multer, ...) as JSON with a fitting status, no stack.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  let status = Number(err.status || err.statusCode);
+  if (err.type === 'entity.too.large' || err.code === 'LIMIT_FILE_SIZE') status = 413;
+  else if (err.type === 'entity.parse.failed') status = 400;
+  if (!(status >= 400 && status < 600)) status = 500;
+  if (status >= 500) console.error('[server]', err);
+  res.status(status).json({ error: err.message || 'Request failed' });
+});
 
 function shutdown() {
   console.log('Shutting down workers...');
