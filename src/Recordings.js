@@ -325,6 +325,12 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
     translations: { ...(s.translationsHash === h ? s.translations : {}), [target]: out },
     translationsHash: h,
   }));
+  // Notes translations belong to one generated summary (createdAt); a regenerated one drops them.
+  const onNotesTranslation = (target, out, forAt) => updateStore((s) => (!s || s.createdAt !== forAt ? s : {
+    ...s,
+    notesTranslations: { ...(s.notesTranslationsFor === forAt ? s.notesTranslations : {}), [target]: out },
+    notesTranslationsFor: forAt,
+  }));
   const onAnswer = (item) => updateStore((s) => ({ ...s, qa: [...(s.qa || []), item] }));
   function onTranscriptSaved(body) {
     setText(body.text);
@@ -497,6 +503,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
           auto={auto}
           actions={{ saveSummary, rename: renameRecording }}
           onGenerated={onGenerated}
+          onNotesTranslation={onNotesTranslation}
           onError={onError}
         />
       </div>
