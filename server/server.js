@@ -35,7 +35,9 @@ const io = new Server(server, {
   pingInterval: 25000,
   pingTimeout: 60000,
 });
-const PORT = 5000;
+// App-specific name: a generic PORT in a developer's environment must not move the
+// server away from the 5000 that the launchers and the dev client expect.
+const PORT = /^\d+$/.test(process.env.TRANSCRIBER_PORT || '') ? parseInt(process.env.TRANSCRIBER_PORT, 10) : 5000;
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python';
 const WORKER_SCRIPT = path.join(__dirname, 'whisper_worker.py');
 const RECORDINGS_DIR = process.env.RECORDINGS_DIR || path.join(os.homedir(), 'Documents', 'Meeting Recordings');
@@ -318,9 +320,28 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', workers: status });
 });
 
+// Model names reach WhisperModel(), which also accepts local folders (incl. UNC paths) and
+// Hugging Face repo ids. Requests may only name a plain size like "base" or "large-v3-turbo".
+const MODEL_NAME = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/i;
+const modelFrom = (value) => {
+  if (value === undefined || value === null || value === '') return 'base';
+  return typeof value === 'string' && value.length <= 40 && MODEL_NAME.test(value) ? value : null;
+};
+
+// Transcription endpoints start CPU-heavy work and downloads: like /api/recordings below,
+// refuse requests a foreign website makes from the user's browser (multipart POSTs need
+// no CORS preflight).
+const localOriginOnly = (req, res, next) => {
+  const origin = req.get('origin');
+  if (origin && LOOPBACK_BIND && !LOCAL_ORIGIN.test(origin)) return res.status(403).json({ error: 'Forbidden origin' });
+  next();
+};
+app.use(['/api/warmup', '/api/transcribe'], localOriginOnly);
+
 // Pre-load a model without doing a transcription.
 app.post('/api/warmup', async (req, res) => {
-  const model = (req.body && req.body.model) || 'base';
+  const model = modelFrom(req.body && req.body.model);
+  if (!model) return res.status(400).json({ ok: false, error: 'Invalid model name' });
   const w = getWorker(model);
   touchWorker(model);
   try {
@@ -335,7 +356,11 @@ app.post('/api/transcribe', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const filePath = req.file.path;
-  const model = req.body.model || 'base';
+  const model = modelFrom(req.body.model);
+  if (!model) {
+    fs.unlink(filePath, () => {});
+    return res.status(400).json({ error: 'Invalid model name' });
+  }
   const clientId = req.body.clientId;
   const language = req.body.language || 'he';
   const jobId = crypto.randomUUID();
@@ -567,7 +592,8 @@ app.post('/api/recordings/:id/transcribe', wrap(async (req, res) => {
   const meta = await store.get(req.params.id);
   if (findRecordingJob(meta.id)) return res.status(409).json({ error: 'Already transcribing' });
   const body = req.body || {};
-  const model = typeof body.model === 'string' && body.model ? body.model : 'base';
+  const model = modelFrom(body.model);
+  if (!model) return res.status(400).json({ error: 'Invalid model name' });
   const language = typeof body.language === 'string' && body.language ? body.language : 'he';
   const jobId = await transcribeRecording(meta, { model, language, clientId: body.clientId });
   res.status(202).json({ jobId });

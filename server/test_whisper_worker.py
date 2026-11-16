@@ -1,5 +1,7 @@
 """Device selection regressions; no model downloads or GPU required."""
 import os
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -69,6 +71,49 @@ class DeviceSelectionTests(unittest.TestCase):
 
 def fake_segment(start, end, text, compression_ratio=1.5):
     return MagicMock(start=start, end=end, text=text, compression_ratio=compression_ratio)
+
+
+class ModelSourceTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        bundled = Path(self.tmp.name) / "base"
+        bundled.mkdir()
+        (bundled / "model.bin").write_bytes(b"")
+        self.env = patch.dict(os.environ, {"WHISPER_MODELS_DIR": self.tmp.name}, clear=True)
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_bundled_model_loads_from_plain_folder(self):
+        self.assertEqual(worker.model_source("base"), (str(Path(self.tmp.name) / "base"), {}))
+
+    def test_other_models_download_into_models_dir(self):
+        self.assertEqual(worker.model_source("small"), ("small", {"download_root": self.tmp.name}))
+
+    def test_path_like_names_are_rejected(self):
+        # WhisperModel would load any existing folder, so these must never get through.
+        for name in ("base/x", "..", "base.", r"C:\Windows", r"\\host\share\m",
+                     "Systran/faster-whisper-base", "", ".base"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                worker.model_source(name)
+
+    def test_plain_size_names_are_accepted(self):
+        for name in ("tiny.en", "large-v3", "large-v3-turbo", "distil-large-v3.5"):
+            with self.subTest(name=name):
+                self.assertEqual(worker.model_source(name)[0], name)
+
+    def test_without_models_dir_uses_default_cache(self):
+        del os.environ["WHISPER_MODELS_DIR"]
+        self.assertEqual(worker.model_source("base"), ("base", {}))
+
+    @patch.object(worker, "configure_cuda_libraries")
+    @patch.object(worker.ctranslate2, "get_cuda_device_count", return_value=0)
+    @patch.object(worker, "WhisperModel")
+    def test_load_model_passes_bundled_path(self, factory, *_):
+        os.environ["WHISPER_BATCHED"] = "0"
+        worker.load_model("base")
+        self.assertEqual(factory.call_args.args[0], str(Path(self.tmp.name) / "base"))
+        self.assertNotIn("download_root", factory.call_args.kwargs)
 
 
 class GapRecoveryTests(unittest.TestCase):

@@ -25,6 +25,7 @@ when relevant):
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -94,6 +95,7 @@ def clear_cancel(job_id):
 # Model loading
 # ---------------------------------------------------------------------------
 _dll_directories = []  # Keep Windows DLL directory handles alive.
+MODEL_NAME = re.compile(r"[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*")  # same rule as server.js
 
 
 def configure_cuda_libraries():
@@ -109,6 +111,25 @@ def configure_cuda_libraries():
                 _dll_directories.append(os.add_dll_directory(str(directory)))
     if directories:
         os.environ["PATH"] = os.pathsep.join(directories + [os.environ.get("PATH", "")])
+
+
+def model_source(model_name):
+    """
+    Return (model, extra WhisperModel kwargs). The Windows installer sets
+    WHISPER_MODELS_DIR and ships models as plain folders (<dir>/base/model.bin),
+    so the bundled model loads offline; other models download into that dir.
+    """
+    # WhisperModel also takes local folders (incl. UNC paths) and Hugging Face repo ids;
+    # the name comes from an HTTP request, so only plain size names are accepted.
+    if not MODEL_NAME.fullmatch(model_name or ""):
+        raise ValueError(f"Invalid model name: {model_name!r}")
+    models_dir = os.environ.get("WHISPER_MODELS_DIR")
+    if not models_dir:
+        return model_name, {}
+    local = Path(models_dir) / model_name
+    if (local / "model.bin").is_file():
+        return str(local), {}
+    return model_name, {"download_root": models_dir}
 
 
 def load_model(model_name):
@@ -139,7 +160,8 @@ def load_model(model_name):
             kwargs["cpu_threads"] = max(1, int(os.environ.get(
                 "WHISPER_CPU_THREADS", str(os.cpu_count() or 4)
             )))
-        loaded = WhisperModel(model_name, **kwargs)
+        source, extra = model_source(model_name)
+        loaded = WhisperModel(source, **kwargs, **extra)
         if device == "cuda":
             # CUDA DLLs can load lazily. Exercise the encoder before announcing
             # readiness so missing cuBLAS/cuDNN fails here, not on the first file.
