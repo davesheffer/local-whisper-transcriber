@@ -1,0 +1,72 @@
+{
+  "id": "dec_ff2388df1a",
+  "title": "Bundle full runtime and base model in a per-user Windows installer",
+  "topic": null,
+  "status": "accepted",
+  "context": "Target PCs may have no Python, Node, or GPU, and users may not be able to install software or get admin rights. The app needed to run after a single installer on a machine with only Chrome or Edge.",
+  "decision": "Build MeetingTranscriber-Setup-<version>.exe with Inno Setup. It installs per user (no admin) to a fixed folder and bundles a portable node.exe, an embeddable CPython 3.12 with CPU-only faster-whisper, the prebuilt web app, and the Whisper base model as a plain folder that loads offline. Launchers are path-relative. Upgrade and uninstall stop only the bundled runtime's processes and keep recordings and downloaded models. The build smoke-tests the bundle with a minimal PATH and HF_HUB_OFFLINE=1. Server and worker changes support this: WHISPER_MODELS_DIR loads <dir>/<name>/model.bin offline, model names must be plain size names, and TRANSCRIBER_PORT lets the staged server run beside a server on 5000.",
+  "consequences": [
+    "The installer is large because it ships Node, CPython, and the base model.",
+    "Transcription runs on the CPU. The CUDA libraries are not bundled; the worker tries CUDA and falls back to CPU before reporting ready.",
+    "The installer is unsigned, so SmartScreen warns users on first run.",
+    "Other Whisper models still download on first use into the bundled models folder.",
+    "Upgrade and uninstall replace runtime\\ and app\\ wholesale, which is why the install folder is fixed.",
+    "Model names from requests are restricted to plain size names. Paths and Hugging Face repo ids are rejected with 400 in server.js and ValueError in the worker."
+  ],
+  "alternatives_rejected": [
+    "Installer folder-selection page: omitted, because upgrades and uninstall replace runtime\\ and app\\ wholesale and the fixed folder keeps them predictable."
+  ],
+  "rejected_tripwires": [
+    {
+      "alternative": "Installer folder-selection page: omitted, because upgrades and uninstall replace runtime\\ and app\\ wholesale and the fixed folder keeps them predictable.",
+      "scope": [
+        "packaging/**",
+        "server/**"
+      ],
+      "forbids": {
+        "deps": [],
+        "symbols": [],
+        "patterns": []
+      },
+      "provenance": {
+        "source": "llm_draft",
+        "confidence": 0.5,
+        "evidence": []
+      }
+    }
+  ],
+  "related_components": [
+    "cmp_3de4f901ff"
+  ],
+  "related_files": [
+    "packaging/README.md",
+    "server/server.js",
+    "server/test_whisper_worker.py",
+    "server/whisper_worker.py"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "fb50271",
+  "valid_from": "2026-11-16T09:15:00+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:fb50271",
+      "synth:provider=claude-cli",
+      "branch:feat/windows-installer",
+      "packaging/README.md",
+      "server/server.js",
+      "server/test_whisper_worker.py",
+      "server/whisper_worker.py"
+    ],
+    "last_verified": "2026-11-16T07:15:14.060Z"
+  },
+  "date": "2026-11-16T09:15:00+02:00"
+}
