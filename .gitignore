@@ -38,3 +38,8 @@ yarn-error.log*
 /launcher
 server/server.log
 server/server.log.old
+
+# packaging\build-installer.ps1 output
+/packaging/.cache
+/packaging/stage
+/packaging/dist
