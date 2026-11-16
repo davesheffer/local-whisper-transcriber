@@ -3,6 +3,7 @@ import { LanguageIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 
 import { fmtStamp, friendlyError, isAbort, translateText, translatorStatus } from './ai/builtin';
 import { progressLabel } from './aiNotes';
+import { useI18n } from './i18n';
 import { langName } from './useRecordings';
 
 // Index of the segment playing at `t` seconds (-1 before the first / well past the last).
@@ -21,6 +22,7 @@ function segmentAt(segs, t) {
 export default function RecordingTranscript({
   rec, text, segments, running, audioRef, onSeek, lang, store, hash, onTranslation, saveTranscript, onSaved, onError,
 }) {
+  const { t } = useI18n();
   const done = rec.transcript?.status === 'done';
   const hasSegs = Array.isArray(segments) && segments.length > 0;
   const target = lang === 'en' ? 'he' : 'en';
@@ -123,66 +125,69 @@ export default function RecordingTranscript({
       setDraft(null);
     } catch (e) {
       // The server's message says why (409: transcription running / not finished).
-      onError(`Saving the transcript failed: ${e.message}`);
+      onError(t('transcript.saveFailed', { error: e.message }));
     } finally { setSaving(false); }
   }
 
   if (!done) {
     return (
       <p className="recs-transcript-empty">
-        {running ? 'Transcribing — the text will appear here when it is done.' : 'No transcript yet.'}
+        {running ? t('transcript.running') : t('transcript.none')}
       </p>
     );
   }
-  if (text == null) return <div className="recs-transcript">Loading…</div>;
+  if (text == null) return <div className="recs-transcript">{t('common.loading')}</div>;
 
   if (editing) {
     return (
       <div className="tr-edit">
         {Array.isArray(draft) ? (
-          <ol className="tr-edit-list">
+          <ol className="tr-edit-list" dir={lang === 'he' ? 'rtl' : lang === 'en' ? 'ltr' : undefined}>
             {draft.map((s, i) => (
               <li key={i} className="tr-edit-row">
-                <span className="seg-time static">[{fmtStamp(s.start)}]</span>
+                <span className="seg-time static" dir="ltr">[{fmtStamp(s.start)}]</span>
                 <textarea
                   dir="auto"
                   value={s.text}
                   rows={Math.max(1, Math.ceil(s.text.length / 70))}
-                  aria-label={`Segment at ${fmtStamp(s.start)}`}
+                  aria-label={t('transcript.segmentAria', { time: fmtStamp(s.start) })}
                   onChange={(e) => { const v = e.target.value; setDraft((d) => d.map((x, j) => (j === i ? { ...x, text: v } : x))); }}
                 />
               </li>
             ))}
           </ol>
         ) : (
-          <textarea className="tr-edit-all" dir="auto" value={draft} aria-label="Transcript" onChange={(e) => setDraft(e.target.value)} />
+          <textarea className="tr-edit-all" dir="auto" value={draft} aria-label={t('transcript.textAria')} onChange={(e) => setDraft(e.target.value)} />
         )}
         <div className="rec-actions">
-          <button type="button" className="primary-btn" onClick={save} disabled={saving || running}>{saving ? 'Saving…' : 'Save transcript'}</button>
-          <button type="button" className="ghost-btn" onClick={cancelEdit} disabled={saving}>Cancel</button>
+          <button type="button" className="primary-btn" onClick={save} disabled={saving || running}>{saving ? t('common.saving') : t('transcript.save')}</button>
+          <button type="button" className="ghost-btn" onClick={cancelEdit} disabled={saving}>{t('common.cancel')}</button>
         </div>
       </div>
     );
   }
 
   const trName = langName(target) || target;
+  // Lay out the transcript in its own language's direction, not the UI's.
+  const textDir = lang === 'he' ? 'rtl' : lang === 'en' ? 'ltr' : undefined;
   return (
     <div className="tr">
       <div className="tr-bar">
-        <button type="button" className="ghost-btn small" onClick={startEdit} disabled={running}><PencilSquareIcon aria-hidden="true" />Edit</button>
+        <button type="button" className="ghost-btn small" onClick={startEdit} disabled={running}><PencilSquareIcon aria-hidden="true" />{t('transcript.edit')}</button>
         {canTranslate && (
           <button type="button" className="ghost-btn small" aria-pressed={showTr} onClick={toggleTranslation}>
-            <LanguageIcon aria-hidden="true" />{showTr ? 'Hide translation' : `Show ${trName} translation`}
+            <LanguageIcon aria-hidden="true" />{showTr ? t('transcript.hideTr') : t('transcript.showTr', { lang: trName })}
           </button>
         )}
         {trBusy && <span className="ai-note" role="status">{progressLabel(trBusy)}</span>}
-        {rec.transcript?.edited && <span className="chip">Edited</span>}
+        {rec.transcript?.edited && <span className="chip">{t('transcript.edited')}</span>}
       </div>
       {trError && <p className="rec-error" role="alert">{trError}</p>}
 
       {hasSegs ? (
         <ol
           className={`recs-transcript seg-list ${showTr && aligned ? 'with-tr' : ''}`}
+          dir={textDir}
           ref={listRef}
           onWheel={markUserScroll}
           onTouchMove={markUserScroll}
@@ -191,7 +196,7 @@ export default function RecordingTranscript({
         >
           {segments.map((s, i) => (
             <li key={i} data-i={i} className={`seg ${i === active ? 'active' : ''}`} aria-current={i === active ? 'true' : undefined}>
-              <button type="button" className="seg-time" onClick={() => onSeek(s.start)} aria-label={`Play from ${fmtStamp(s.start)}`}>[{fmtStamp(s.start)}]</button>
+              <button type="button" className="seg-time" dir="ltr" onClick={() => onSeek(s.start)} aria-label={t('transcript.playFrom', { time: fmtStamp(s.start) })}>[{fmtStamp(s.start)}]</button>
               <span className="seg-text" dir="auto" onClick={() => { if (!String(window.getSelection && window.getSelection())) onSeek(s.start); }}>{String(s.text || '').trim()}</span>
               {showTr && aligned && <span className="seg-tr" dir="auto">{trLines[i]}</span>}
             </li>
@@ -199,12 +204,12 @@ export default function RecordingTranscript({
         </ol>
       ) : (
         <div className={showTr && trLines ? 'tr-split' : ''}>
-          <div className="recs-transcript" dir="auto">{text || '(no speech detected)'}</div>
+          <div className="recs-transcript" dir="auto">{text || t('transcript.noSpeech')}</div>
           {showTr && trLines && !aligned && <div className="recs-transcript" dir="auto">{cached}</div>}
         </div>
       )}
       {hasSegs && showTr && trLines && !aligned && (
-        <div className="recs-transcript tr-block" dir="auto" aria-label={`${trName} translation`}>{cached}</div>
+        <div className="recs-transcript tr-block" dir="auto" aria-label={t('transcript.trAria', { lang: trName })}>{cached}</div>
       )}
     </div>
   );

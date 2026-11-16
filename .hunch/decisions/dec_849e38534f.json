@@ -1,0 +1,63 @@
+{
+  "id": "dec_849e38534f",
+  "title": "Add English/Hebrew i18n provider with logical-property RTL layout",
+  "topic": null,
+  "status": "accepted",
+  "context": "The commit message does not state a motivation. The change introduces Hebrew UI support, which previously was not present: the app had no i18n layer and its layout was LTR-only. Font loading was also tied to online access, which the commit addresses separately.",
+  "decision": "Added an I18nProvider/useI18n layer with English and Hebrew locales. A language switch in the header is persisted in localStorage and defaults to Hebrew when the browser is Hebrew. The provider sets <html lang> and <html dir> and the page title. Layout uses logical CSS properties throughout. Arrow-key tab navigation and the back arrow mirror in RTL, directional icons use a flip-rtl class, and play/stop/record icons are not mirrored. Dates and durations get bidi isolation, and transcripts lay out in their own language's direction.",
+  "consequences": [
+    "Every user-visible string must go through the locale files (src/locales/en.js and src/locales/he.js), so new strings need both translations.",
+    "Direction is set on the document root at runtime, so RTL behavior depends on the provider being mounted above all tabs.",
+    "Directional icons need the flip-rtl class to mirror correctly. Icons that are not directional must not get it.",
+    "Hebrew glyph coverage now relies on the system font stack (Segoe UI first), since the Google Fonts link was removed for offline use.",
+    "Persisted language is per browser through localStorage, not per account."
+  ],
+  "alternatives_rejected": [],
+  "rejected_tripwires": [],
+  "related_components": [
+    "cmp_f27fede222"
+  ],
+  "related_files": [
+    "src/App.js",
+    "src/Recorder.js",
+    "src/RecordingAsk.js",
+    "src/RecordingNotes.js",
+    "src/RecordingTranscript.js",
+    "src/Recordings.js",
+    "src/aiNotes.js",
+    "src/i18n.js",
+    "src/index.js",
+    "src/locales/en.js",
+    "src/locales/he.js",
+    "src/useRecordings.js"
+  ],
+  "supersedes": null,
+  "superseded_by": null,
+  "caused_by_bug": null,
+  "commit": "04289ed",
+  "valid_from": "2026-11-16T14:31:37+02:00",
+  "valid_to": null,
+  "retired": {
+    "symbols": [],
+    "deps": []
+  },
+  "provenance": {
+    "source": "llm_draft+summary",
+    "confidence": 0.5,
+    "evidence": [
+      "commit:04289ed",
+      "synth:provider=claude-cli",
+      "branch:feat/ui-compact-hebrew",
+      "src/App.js",
+      "src/Recorder.js",
+      "src/RecordingAsk.js",
+      "src/RecordingNotes.js",
+      "src/RecordingTranscript.js",
+      "src/Recordings.js",
+      "src/aiNotes.js",
+      "src/i18n.js"
+    ],
+    "last_verified": "2026-11-16T12:31:50.446Z"
+  },
+  "date": "2026-11-16T14:31:37+02:00"
+}

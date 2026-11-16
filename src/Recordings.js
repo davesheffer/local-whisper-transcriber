@@ -19,23 +19,25 @@ import './RecordingAi.css';
 import { API } from './api';
 import { buildMarkdown, normLang, sha256 } from './ai/builtin';
 import { isDefaultName, resolveLang, transcriptFor, useAiStatus } from './aiNotes';
+import { useI18n, t as tNow } from './i18n';
 import RecordingAsk from './RecordingAsk';
 import RecordingNotes from './RecordingNotes';
 import RecordingTranscript from './RecordingTranscript';
-import { fmtDate, fmtDuration, langName } from './useRecordings';
+import { fmtDate, fmtDuration, fmtShortDate, langName } from './useRecordings';
 
 const NARROW = '(max-width: 719px)';
 const isNarrow = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia(NARROW).matches;
 
 function StatusChip({ rec, progress }) {
+  const { t: tr } = useI18n();
   const t = rec.transcript;
   const pct = progress?.percent;
-  if (t && ['queued', 'running'].includes(t.status)) return <span className="chip chip-run"><ArrowPathIcon className="chip-icon spin" aria-hidden="true" />{pct != null ? `Transcribing ${pct}%` : (progress?.message || 'Transcribing…')}</span>;
-  if (t?.status === 'done') return <span className="chip chip-done"><CheckCircleIcon className="chip-icon" aria-hidden="true" />Transcribed</span>;
-  if (t?.status === 'error') return <span className="chip chip-err"><ExclamationCircleIcon className="chip-icon" aria-hidden="true" />Failed</span>;
-  if (t?.status === 'interrupted') return <span className="chip chip-warn"><ExclamationTriangleIcon className="chip-icon" aria-hidden="true" />Interrupted</span>;
-  if (t?.status === 'cancelled') return <span className="chip chip-warn"><XMarkIcon className="chip-icon" aria-hidden="true" />Cancelled</span>;
-  return <span className="chip"><ClockIcon className="chip-icon" aria-hidden="true" />Not transcribed</span>;
+  if (t && ['queued', 'running'].includes(t.status)) return <span className="chip chip-run"><ArrowPathIcon className="chip-icon spin" aria-hidden="true" />{pct != null ? tr('recs.chip.transcribingPct', { percent: pct }) : (progress?.message || tr('recs.chip.transcribing'))}</span>;
+  if (t?.status === 'done') return <span className="chip chip-done"><CheckCircleIcon className="chip-icon" aria-hidden="true" />{tr('recs.chip.done')}</span>;
+  if (t?.status === 'error') return <span className="chip chip-err"><ExclamationCircleIcon className="chip-icon" aria-hidden="true" />{tr('recs.chip.failed')}</span>;
+  if (t?.status === 'interrupted') return <span className="chip chip-warn"><ExclamationTriangleIcon className="chip-icon" aria-hidden="true" />{tr('recs.chip.interrupted')}</span>;
+  if (t?.status === 'cancelled') return <span className="chip chip-warn"><XMarkIcon className="chip-icon" aria-hidden="true" />{tr('recs.chip.cancelled')}</span>;
+  return <span className="chip"><ClockIcon className="chip-icon" aria-hidden="true" />{tr('recs.chip.none')}</span>;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,7 @@ function StatusChip({ rec, progress }) {
 // On narrow screens only one pane shows at a time (`view` = 'list' | 'detail').
 // ---------------------------------------------------------------------------
 export default function Recordings({ data, selectedId, onSelect, view, onView, onGoRecord, live, auto }) {
+  const { t, rich } = useI18n();
   const { recordings, folder, progress, serverDown, loaded, loadFailed, refresh } = data;
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(null);
@@ -103,24 +106,26 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
 
   const head = (
     <div className="rec-history-head">
-      <h2 id="recs-title">Recordings</h2>
+      <h2 id="recs-title">{t('recs.title')}</h2>
       <span className="rec-count">{recordings.length}</span>
     </div>
   );
   const banner = serverDown && (
     <div className="rec-banner">
       <ExclamationTriangleIcon className="rec-banner-icon" aria-hidden="true" />
-      <span>Server offline. Recordings and transcripts will update when it's back.</span>
+      <span>{t('recs.serverDown')}</span>
     </div>
   );
   const liveRow = live && (
     <button type="button" className="recs-row recs-row-live" onClick={onGoRecord}>
-      <span className="recs-row-name">Current recording</span>
-      <span className="recs-row-meta">{live === 'recording' ? 'In progress — open the Record tab to stop' : 'Saving to the server…'}</span>
-      <span className={`chip ${live === 'recording' ? 'chip-err' : 'chip-run'}`}>
-        {live === 'recording'
-          ? <><span className="recs-live-dot" aria-hidden="true" />Recording</>
-          : <><ArrowPathIcon className="chip-icon spin" aria-hidden="true" />Uploading…</>}
+      <span className="recs-row-name">{t('recs.live.name')}</span>
+      <span className="recs-row-line">
+        <span className="recs-row-meta">{live === 'recording' ? t('recs.live.recordingMeta') : t('recs.live.savingMeta')}</span>
+        <span className={`chip ${live === 'recording' ? 'chip-err' : 'chip-run'}`}>
+          {live === 'recording'
+            ? <><span className="recs-live-dot" aria-hidden="true" />{t('recs.live.recording')}</>
+            : <><ArrowPathIcon className="chip-icon spin" aria-hidden="true" />{t('recs.live.uploading')}</>}
+        </span>
       </span>
     </button>
   );
@@ -133,16 +138,16 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
         {banner}
         {liveRow}
         {!loaded ? (
-          <div className="rec-empty">Loading recordings…</div>
+          <div className="rec-empty">{t('recs.loading')}</div>
         ) : loadFailed ? (
           <div className="rec-empty">
-            <p>Couldn't load recordings.</p>
-            <button type="button" className="ghost-btn" onClick={refresh}>Try again</button>
+            <p>{t('recs.loadFailed')}</p>
+            <button type="button" className="ghost-btn" onClick={refresh}>{t('common.tryAgain')}</button>
           </div>
         ) : (
           <div className="rec-empty">
-            <p>No recordings yet — record one in the Record tab.</p>
-            <button type="button" className="ghost-btn" onClick={onGoRecord}>Go to Record</button>
+            <p>{t('recs.empty')}</p>
+            <button type="button" className="ghost-btn" onClick={onGoRecord}>{t('recs.startRecording')}</button>
           </div>
         )}
       </section>
@@ -153,12 +158,6 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
     <div className={`recs ${view === 'detail' ? 'show-detail' : 'show-list'}`}>
       <section className="recs-list-pane" aria-labelledby="recs-title">
         {head}
-        {folder && (
-          <p className="rec-folder">
-            <span>Saved in <code>{folder}</code></span>
-            <button type="button" className="ghost-btn small" onClick={copyPath}>{copiedPath ? 'Copied ✓' : 'Copy path'}</button>
-          </p>
-        )}
         {banner}
         <div className="recs-search">
           <MagnifyingGlassIcon className="recs-search-icon" aria-hidden="true" />
@@ -166,19 +165,19 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
             type="search"
             dir="auto"
             value={query}
-            placeholder="Search recordings"
-            aria-label="Search recordings"
+            placeholder={t('recs.search')}
+            aria-label={t('recs.search')}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         {liveRow}
         {shown.length === 0 ? (
           <div className="rec-empty">
-            <p>No recordings match “{query.trim()}”.</p>
-            <button type="button" className="ghost-btn small" onClick={() => setQuery('')}>Clear search</button>
+            <p>{rich('recs.noMatch', { query: <bdi>{query.trim()}</bdi> })}</p>
+            <button type="button" className="ghost-btn small" onClick={() => setQuery('')}>{t('recs.clearSearch')}</button>
           </div>
         ) : (
-          <ul className="recs-list" ref={listRef} aria-label="Recordings">
+          <ul className="recs-list" ref={listRef} aria-label={t('recs.listLabel')}>
             {shown.map((r) => (
               <li key={r.id}>
                 <button
@@ -188,18 +187,26 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
                   onClick={() => select(r.id)}
                 >
                   <span className="recs-row-name" dir="auto">{r.name}</span>
-                  <span className="recs-row-meta">{fmtDate(r.created)} · {fmtDuration(r.duration)}</span>
-                  <StatusChip rec={r} progress={progress[r.id]} />
+                  <span className="recs-row-line">
+                    <span className="recs-row-meta"><bdi>{fmtShortDate(r.created)}</bdi> · <bdi>{fmtDuration(r.duration)}</bdi></span>
+                    <StatusChip rec={r} progress={progress[r.id]} />
+                  </span>
                 </button>
               </li>
             ))}
           </ul>
         )}
+        {folder && (
+          <p className="rec-folder">
+            <span className="rec-folder-path" title={folder}>{rich('recs.savedIn', { path: <code dir="ltr">{folder}</code> })}</span>
+            <button type="button" className="ghost-btn small" onClick={copyPath}>{copiedPath ? t('common.copied') : t('recs.copyPath')}</button>
+          </p>
+        )}
       </section>
 
-      <section className="recs-detail" aria-label="Recording details" ref={detailRef}>
+      <section className="recs-detail" aria-label={t('recs.detailsLabel')} ref={detailRef}>
         <button type="button" className="link-btn recs-back" onClick={backToList}>
-          <ArrowLeftIcon aria-hidden="true" />Back to list
+          <ArrowLeftIcon className="flip-rtl" aria-hidden="true" />{t('recs.back')}
         </button>
         {status && (
           <div className={`rec-status recs-status ${status.error ? 'err' : ''}`} role="status" aria-live="polite">
@@ -218,7 +225,7 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
             onNotice={(m) => say(m)}
           />
         ) : (
-          <div className="rec-empty">Select a recording</div>
+          <div className="rec-empty">{t('recs.selectOne')}</div>
         )}
       </section>
     </div>
@@ -226,9 +233,9 @@ export default function Recordings({ data, selectedId, onSelect, view, onView, o
 }
 
 const SUBTABS = [
-  { id: 'notes', label: 'Notes' },
-  { id: 'transcript', label: 'Transcript' },
-  { id: 'ask', label: 'Ask' },
+  { id: 'notes', labelKey: 'detail.tab.notes' },
+  { id: 'transcript', labelKey: 'detail.tab.transcript' },
+  { id: 'ask', labelKey: 'detail.tab.ask' },
 ];
 let lastSubtab = 'notes';
 const EMPTY_PENDING = { qa: [], translations: {}, translationsHash: null };
@@ -239,6 +246,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
     transcribe, rename: renameRecording, remove: removeRecording, cancel: cancelTranscription, fetchTranscript, refresh,
     getSegments, getSummary, saveSummary, saveTranscript,
   } = actions;
+  const { t: tr, dir } = useI18n();
   const [name, setName] = useState(rec.name);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(null);
@@ -327,7 +335,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
       await saveSerial(rec.id, next, buildMarkdown(rec, next, transcriptFor(segments, text)));
     } catch (e) {
       console.error('[ai] saving the summary failed', e);
-      onError(`Saving the notes file failed: ${e.message}`);
+      onError(tNow('detail.saveNotesFailed', { error: e.message }));
     }
   }, [rec, segments, text, saveSerial, onError]);
 
@@ -360,7 +368,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
   function onTranscriptSaved(body) {
     setText(body.text);
     if (body.segments) setSegments(body.segments);
-    onNotice('Transcript saved.');
+    onNotice(tNow('detail.transcriptSaved'));
   }
 
   async function rename() {
@@ -369,20 +377,20 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
     if (!clean || clean === rec.name) { setName(rec.name); return; }
     try {
       await renameRecording(rec.id, clean);
-    } catch (e) { onError(`Rename failed: ${e.message}`); setName(rec.name); }
+    } catch (e) { onError(tNow('detail.renameFailed', { error: e.message })); setName(rec.name); }
   }
   async function remove() {
     try {
       await removeRecording(rec.id);
-      onNotice('Moved to the _deleted folder.');
+      onNotice(tNow('detail.deleted'));
       refresh();
-    } catch (e) { onError(`Delete failed: ${e.message}`); }
+    } catch (e) { onError(tNow('detail.deleteFailed', { error: e.message })); }
   }
   async function cancel() {
-    try { await cancelTranscription(rec.id); } catch (e) { onError(`Cancel failed: ${e.message}`); }
+    try { await cancelTranscription(rec.id); } catch (e) { onError(tNow('detail.cancelFailed', { error: e.message })); }
   }
   async function retranscribe() {
-    try { await transcribe(rec.id); } catch (e) { onError(`Could not start transcription: ${e.message}`); }
+    try { await transcribe(rec.id); } catch (e) { onError(tNow('detail.transcribeFailed', { error: e.message })); }
   }
   async function copy() {
     try {
@@ -391,7 +399,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
       await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (e) { onError(`Copy failed: ${e.message}`); }
+    } catch (e) { onError(tNow('common.copyFailed', { error: e.message })); }
   }
 
   // MediaRecorder WebM has no duration header; make the browser scan it so seeking works.
@@ -430,9 +438,12 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
   }
   const onSubKey = (e) => {
     const i = SUBTABS.findIndex((s) => s.id === sub);
+    // Arrows follow the visual order, which is mirrored in RTL.
+    const fwd = dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
+    const back = dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
     let n;
-    if (e.key === 'ArrowRight') n = (i + 1) % SUBTABS.length;
-    else if (e.key === 'ArrowLeft') n = (i - 1 + SUBTABS.length) % SUBTABS.length;
+    if (e.key === fwd) n = (i + 1) % SUBTABS.length;
+    else if (e.key === back) n = (i - 1 + SUBTABS.length) % SUBTABS.length;
     else if (e.key === 'Home') n = 0;
     else if (e.key === 'End') n = SUBTABS.length - 1;
     else return;
@@ -458,7 +469,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
             value={name}
             dir="auto"
             autoFocus
-            aria-label="Recording name"
+            aria-label={tr('detail.nameAria')}
             onChange={(e) => setName(e.target.value)}
             onBlur={rename}
             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setName(rec.name); setEditing(false); } }}
@@ -466,37 +477,37 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
         ) : (
           <>
             <h3 className="rec-title" dir="auto" tabIndex={-1}>{rec.name}</h3>
-            <button type="button" className="icon-btn" aria-label="Rename" title="Rename" onClick={() => setEditing(true)}><PencilSquareIcon aria-hidden="true" /></button>
+            <button type="button" className="icon-btn" aria-label={tr('detail.rename')} title={tr('detail.rename')} onClick={() => setEditing(true)}><PencilSquareIcon aria-hidden="true" /></button>
           </>
         )}
       </div>
-      <div className="rec-meta">{fmtDate(rec.created)} · {fmtDuration(rec.duration)}{langLabel ? ` · ${langLabel}` : ''}</div>
-      <div className="rec-chip-row">
+      <div className="rec-meta-row">
+        <span className="rec-meta"><bdi>{fmtDate(rec.created)}</bdi>{' · '}<bdi>{fmtDuration(rec.duration)}</bdi>{langLabel ? ` · ${langLabel}` : ''}</span>
         <StatusChip rec={rec} progress={progress} />
         {running && (
           <>
-            <div className="rec-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} aria-label="Transcription progress"><b style={{ width: `${pct || 0}%` }} /></div>
-            <button type="button" className="ghost-btn small" onClick={cancel}>Stop</button>
+            <div className="rec-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} aria-label={tr('detail.progressAria')}><b style={{ width: `${pct || 0}%` }} /></div>
+            <button type="button" className="ghost-btn small" onClick={cancel}>{tr('common.stop')}</button>
           </>
         )}
-        {retry && <button type="button" className="ghost-btn small" onClick={retranscribe}>Try again</button>}
-        {!t && <button type="button" className="ghost-btn small" onClick={retranscribe}>Transcribe</button>}
+        {retry && <button type="button" className="ghost-btn small" onClick={retranscribe}>{tr('common.tryAgain')}</button>}
+        {!t && <button type="button" className="ghost-btn small" onClick={retranscribe}>{tr('detail.transcribe')}</button>}
       </div>
       {t?.status === 'error' && t.error && <p className="rec-error">{t.error}</p>}
       <audio ref={audioRef} className="rec-audio" controls preload="none" src={`${API}/api/recordings/${id}/audio`} onLoadedMetadata={fixDuration} />
       <div className="rec-actions">
         {t?.status === 'done' && (
           <>
-            <button type="button" className="primary-btn" onClick={copy}>{copied ? 'Copied ✓' : 'Copy text'}</button>
-            <a className="ghost-btn" href={`${API}/api/recordings/${id}/transcript?download=1`}><ArrowDownTrayIcon aria-hidden="true" />Download .txt</a>
+            <button type="button" className="primary-btn" onClick={copy}>{copied ? tr('common.copied') : tr('common.copyText')}</button>
+            <a className="ghost-btn small" href={`${API}/api/recordings/${id}/transcript?download=1`} aria-label={tr('detail.transcriptAria')} title={tr('detail.transcriptAria')}><ArrowDownTrayIcon aria-hidden="true" />{tr('detail.transcript')}</a>
           </>
         )}
-        <a className="ghost-btn" href={`${API}/api/recordings/${id}/audio?download=1`}><ArrowDownTrayIcon aria-hidden="true" />Download audio</a>
-        {t && !running && !retry && <button type="button" className="ghost-btn" onClick={retranscribe}><ArrowPathIcon aria-hidden="true" />Transcribe again</button>}
-        <button type="button" className="ghost-btn danger" onClick={remove} disabled={running}><TrashIcon aria-hidden="true" />Delete</button>
+        <a className="ghost-btn small" href={`${API}/api/recordings/${id}/audio?download=1`} aria-label={tr('detail.audioAria')} title={tr('detail.audioAria')}><ArrowDownTrayIcon aria-hidden="true" />{tr('detail.audio')}</a>
+        {t && !running && !retry && <button type="button" className="ghost-btn small icon-narrow" onClick={retranscribe} title={tr('detail.transcribeAgain')}><ArrowPathIcon aria-hidden="true" /><span className="btn-label">{tr('detail.transcribeAgain')}</span></button>}
+        <button type="button" className="ghost-btn small danger rec-delete icon-narrow" onClick={remove} disabled={running} title={tr('detail.delete')}><TrashIcon aria-hidden="true" /><span className="btn-label">{tr('detail.delete')}</span></button>
       </div>
 
-      <div className="subtabs" role="tablist" aria-label="Recording sections">
+      <div className="subtabs" role="tablist" aria-label={tr('detail.sectionsAria')}>
         {SUBTABS.map((s) => (
           <button
             key={s.id}
@@ -510,7 +521,7 @@ function RecordingDetail({ rec, progress, actions, auto, onError, onNotice }) {
             onClick={() => selectSub(s.id)}
             onKeyDown={onSubKey}
           >
-            {s.label}
+            {tr(s.labelKey)}
           </button>
         ))}
       </div>

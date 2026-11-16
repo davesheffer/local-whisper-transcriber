@@ -7,6 +7,7 @@ import { buildMarkdown, friendlyError, isAbort, normLang, translateText, transla
 import {
   AiGate, AUTO_KEY, autoSummarizeOn, downloadText, generateAndSave, progressLabel, safeFileName,
 } from './aiNotes';
+import { useI18n } from './i18n';
 import { fmtDate, langName } from './useRecordings';
 
 const NOTES_LANG_KEY = 'ai.notesLang';
@@ -42,6 +43,7 @@ async function translateNotes(s, from, to, signal, onProgress) {
 export default function RecordingNotes({
   rec, text, segments, lang, hash, summary, pending, getStore, ai, auto, actions, onGenerated, onNotesTranslation, onError,
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -108,7 +110,7 @@ export default function RecordingNotes({
   }
   function stopTr() { if (trCtrl.current) trCtrl.current.abort(); chooseLang(notesLang); }
   const trLabel = (p) => (p.stage === 'notes'
-    ? `Translating notes…${p.total > 1 ? ` (${p.part}/${p.total})` : ''}` : progressLabel(p));
+    ? (p.total > 1 ? t('notes.translatingPart', { part: p.part, total: p.total }) : t('notes.translating')) : progressLabel(p));
 
   async function generate() {
     if (!canGenerate) return;
@@ -141,7 +143,7 @@ export default function RecordingNotes({
       await navigator.clipboard.writeText(buildMarkdown(rec, view, null));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (e) { onError(`Copy failed: ${e.message}`); }
+    } catch (e) { onError(t('common.copyFailed', { error: e.message })); }
   }
   function exportMd() {
     const transcript = Array.isArray(segments) && segments.length ? segments : text;
@@ -154,20 +156,20 @@ export default function RecordingNotes({
 
   return (
     <div className="notes">
-      <AiGate ai={ai} what="Meeting notes" />
+      <AiGate ai={ai} what="notes" />
 
       {working && (
         <div className="ai-busy" role="status" aria-live="polite">
           <ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />
-          <span>{progressLabel(busy || autoJob.progress)}{!busy && autoJob ? ' (automatic)' : ''}</span>
-          <button type="button" className="ghost-btn small" onClick={stop}>Cancel</button>
+          <span>{!busy && autoJob ? t('notes.busyAuto', { label: progressLabel(autoJob.progress) }) : progressLabel(busy || autoJob.progress)}</span>
+          <button type="button" className="ghost-btn small" onClick={stop}>{t('common.cancel')}</button>
         </div>
       )}
       {trBusy && (
         <div className="ai-busy" role="status" aria-live="polite">
           <ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />
           <span>{trLabel(trBusy)}</span>
-          <button type="button" className="ghost-btn small" onClick={stopTr}>Cancel</button>
+          <button type="button" className="ghost-btn small" onClick={stopTr}>{t('common.cancel')}</button>
         </div>
       )}
       {error && <p className="rec-error" role="alert">{error}</p>}
@@ -177,28 +179,28 @@ export default function RecordingNotes({
         <div className="rec-banner">
           <ExclamationTriangleIcon className="rec-banner-icon" aria-hidden="true" />
           <span>
-            Transcript changed — these notes are from an older version.
-            {canGenerate && <> <button type="button" className="link-btn" onClick={generate}>Regenerate</button></>}
+            {t('notes.stale')}
+            {canGenerate && <> <button type="button" className="link-btn" onClick={generate}>{t('notes.regenerate')}</button></>}
           </span>
         </div>
       )}
 
       {summary === undefined && done ? (
-        <p className="recs-transcript-empty">Loading notes…</p>
+        <p className="recs-transcript-empty">{t('notes.loading')}</p>
       ) : has ? (
         <div className="notes-body" lang={shownLang} dir={RTL.includes(shownLang) ? 'rtl' : 'ltr'}>
           {view.title && <h4 className="notes-title" dir="auto">{view.title}</h4>}
           {view.tldr && (
             <section className="notes-sec">
-              <h5>TL;DR</h5>
+              <h5>{t('notes.tldr')}</h5>
               <p dir="auto">{view.tldr}</p>
             </section>
           )}
-          <NoteList head="Key points" items={view.keyPoints} />
-          <NoteList head="Decisions" items={view.decisions} />
+          <NoteList head={t('notes.keyPoints')} items={view.keyPoints} />
+          <NoteList head={t('notes.decisions')} items={view.decisions} />
           {Array.isArray(view.actionItems) && view.actionItems.length > 0 && (
             <section className="notes-sec">
-              <h5>Action items</h5>
+              <h5>{t('notes.actionItems')}</h5>
               <ul className="notes-todo">
                 {view.actionItems.map((a, i) => (
                   <li key={i}>
@@ -209,37 +211,37 @@ export default function RecordingNotes({
               </ul>
             </section>
           )}
-          {summary.createdAt && <p className="notes-meta">Written on this computer by Chrome's built-in AI · {fmtDate(summary.createdAt)}</p>}
+          {summary.createdAt && <p className="notes-meta">{t('notes.writtenBy', { date: fmtDate(summary.createdAt) })}</p>}
         </div>
       ) : !done ? (
-        <p className="recs-transcript-empty">Notes can be written once the recording is transcribed.</p>
+        <p className="recs-transcript-empty">{t('notes.notYet')}</p>
       ) : text != null && !text.trim() ? (
-        <p className="recs-transcript-empty">No speech was detected, so there is nothing to summarize.</p>
+        <p className="recs-transcript-empty">{t('notes.noSpeech')}</p>
       ) : ai.state === 'available' && !working ? (
-        <p className="recs-transcript-empty">No notes yet.</p>
+        <p className="recs-transcript-empty">{t('notes.none')}</p>
       ) : null}
 
       <div className="rec-actions">
         {ai.state === 'available' && done && (
           <button type="button" className={has ? 'ghost-btn' : 'primary-btn'} onClick={generate} disabled={!canGenerate}>
             {has ? <ArrowPathIcon aria-hidden="true" className="btn-icon" /> : <SparklesIcon aria-hidden="true" className="btn-icon" />}
-            {has ? 'Regenerate' : 'Generate notes'}
+            {has ? t('notes.regenerate') : t('notes.generate')}
           </button>
         )}
         {canToggle && (
           <button type="button" className="ghost-btn" aria-pressed={showTr} onClick={toggleLang}>
             <LanguageIcon aria-hidden="true" />
-            {`Show in ${langName(toLang) || toLang}`}
+            {t('notes.showIn', { lang: langName(toLang) || toLang })}
           </button>
         )}
-        {has && <button type="button" className="ghost-btn" onClick={copy}>{copied ? 'Copied ✓' : 'Copy notes'}</button>}
-        {has && <button type="button" className="ghost-btn" onClick={exportMd}><ArrowDownTrayIcon aria-hidden="true" />Export .md</button>}
+        {has && <button type="button" className="ghost-btn" onClick={copy}>{copied ? t('common.copied') : t('notes.copy')}</button>}
+        {has && <button type="button" className="ghost-btn" onClick={exportMd}><ArrowDownTrayIcon aria-hidden="true" />{t('notes.export')}</button>}
       </div>
 
       {ai.state !== 'unsupported' && (
         <div className="field field-toggle notes-auto">
           <input id="ai-auto" type="checkbox" role="switch" className="toggle" checked={autoOn} onChange={(e) => toggleAuto(e.target.checked)} />
-          <label htmlFor="ai-auto">Write notes automatically for new recordings</label>
+          <label htmlFor="ai-auto">{t('notes.auto')}</label>
         </div>
       )}
     </div>

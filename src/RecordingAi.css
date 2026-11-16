@@ -3,33 +3,32 @@
 
 .btn-icon { width: 16px; height: 16px; flex: none; }
 
-/* Sub-tabs: a smaller version of the app tabs */
+/* Sub-tabs: compact underline style */
 .subtabs {
   display: flex;
-  gap: 4px;
-  margin-top: 18px;
-  margin-bottom: 12px;
-  padding: 3px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  gap: var(--s1);
+  margin-block: var(--s4) var(--s3);
+  border-block-end: 1px solid var(--border);
 }
 .subtab {
-  flex: 1;
+  flex: none;
   min-width: 0;
-  min-height: 40px;
-  padding: 6px 10px;
+  min-height: var(--control);
+  padding: 0 var(--s3);
+  margin-block-end: -1px;
   border: 0;
-  border-radius: 8px;
+  border-block-end: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-2);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--t), color var(--t);
+  transition: border-color var(--t), color var(--t);
 }
 .subtab:hover { color: var(--ink); }
-.subtab.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12); }
+.subtab.active { color: var(--accent); border-block-end-color: var(--accent); }
 .subtab-panel[hidden] { display: none; }
 /* The active panel takes the height left under the fixed top of the detail */
 .subtab-panel { min-width: 0; }
@@ -189,6 +188,8 @@
   .tr-split { grid-template-columns: minmax(0, 1fr); }
   /* Short phones: the card scrolls the header away and the list keeps a usable height */
   .subtab-panel:not([hidden]) { min-height: max(320px, 60dvh); }
+  /* One scroller on phones: notes grow with the card instead of scrolling inside it */
+  .notes > .notes-body { flex: none; overflow-y: visible; }
 }
 @media (max-width: 480px) {
   .ask-input { flex-direction: column; align-items: stretch; }
