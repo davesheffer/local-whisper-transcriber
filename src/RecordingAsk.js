@@ -3,9 +3,11 @@ import { ArrowPathIcon, PaperAirplaneIcon, StopIcon } from '@heroicons/react/24/
 
 import { ask, friendlyError, isAbort } from './ai/builtin';
 import { AiGate, progressLabel } from './aiNotes';
+import { useI18n } from './i18n';
 
 // Ask tab: a chat about the meeting, answered on-device from the transcript.
 export default function RecordingAsk({ rec, text, lang, ai, thread, onAnswer }) {
+  const { t } = useI18n();
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(null); // { question, stage, … }
   const [partial, setPartial] = useState('');
@@ -50,12 +52,12 @@ export default function RecordingAsk({ rec, text, lang, ai, thread, onAnswer }) 
 
   return (
     <div className="ask">
-      <AiGate ai={ai} what="Questions about the meeting" />
-      {!done && <p className="recs-transcript-empty">You can ask questions once the recording is transcribed.</p>}
+      <AiGate ai={ai} what="ask" />
+      {!done && <p className="recs-transcript-empty">{t('ask.notYet')}</p>}
 
       <div className="ask-scroll">
       {(thread.length > 0 || busy) && (
-        <ol className="ask-thread" aria-label="Questions and answers">
+        <ol className="ask-thread" aria-label={t('ask.threadAria')}>
           {thread.map((m, i) => (
             <li key={`${m.at}-${i}`} className="ask-pair">
               <p className="ask-q" dir="auto">{m.q}</p>
@@ -82,22 +84,22 @@ export default function RecordingAsk({ rec, text, lang, ai, thread, onAnswer }) 
             dir="auto"
             rows={2}
             value={q}
-            placeholder="Ask about this meeting — e.g. What did we decide about the budget?"
-            aria-label="Question about this meeting"
+            placeholder={t('ask.placeholder')}
+            aria-label={t('ask.inputAria')}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
             }}
           />
           {busy ? (
-            <button type="button" className="ghost-btn" onClick={stop}><StopIcon aria-hidden="true" />Stop</button>
+            <button type="button" className="ghost-btn" onClick={stop}><StopIcon aria-hidden="true" />{t('common.stop')}</button>
           ) : (
-            <button type="button" className="primary-btn" onClick={send} disabled={!q.trim()}><PaperAirplaneIcon aria-hidden="true" className="btn-icon" />Ask</button>
+            <button type="button" className="primary-btn" onClick={send} disabled={!q.trim()}><PaperAirplaneIcon aria-hidden="true" className="btn-icon" />{t('ask.send')}</button>
           )}
         </div>
       )}
       {ready && thread.length === 0 && !busy && (
-        <p className="ai-note">Answers come from the transcript only and are written on this computer. Press Enter to send, Shift+Enter for a new line.</p>
+        <p className="ai-note">{t('ask.hint')}</p>
       )}
     </div>
   );

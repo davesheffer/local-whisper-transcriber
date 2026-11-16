@@ -7,6 +7,7 @@ import { ArrowPathIcon, ExclamationTriangleIcon, SparklesIcon } from '@heroicons
 import {
   buildMarkdown, detectLanguage, friendlyError, getStatus, guessLang, normLang, overallStatus, prepare, summarize,
 } from './ai/builtin';
+import { t, useI18n } from './i18n';
 
 export const AUTO_KEY = 'ai.autoSummarize';
 export const autoSummarizeOn = () => { try { return localStorage.getItem(AUTO_KEY) !== 'false'; } catch { return true; } };
@@ -29,17 +30,17 @@ export async function resolveLang(declared, text) {
 
 export function progressLabel(p) {
   if (!p) return '';
-  const part = p.total > 1 ? ` part ${p.part}/${p.total}` : '';
+  const part = p.total > 1 ? { part: p.part, total: p.total } : null;
   switch (p.stage) {
-    case 'download': return `Downloading the on-device model… ${Math.round((p.loaded || 0) * 100)}%`;
-    case 'translate': return `Translating${part ? ` (${part.trim()})` : ''}…`;
-    case 'start': return 'Starting the on-device model…';
-    case 'summarize': return `Summarizing${part}…`;
-    case 'reduce': return 'Combining notes…';
-    case 'translate-back': return 'Translating the result back…';
-    case 'answer': return 'Thinking…';
-    case 'save': return 'Saving…';
-    default: return 'Working…';
+    case 'download': return t('ai.progress.download', { percent: Math.round((p.loaded || 0) * 100) });
+    case 'translate': return part ? t('ai.progress.translatePart', part) : t('ai.progress.translate');
+    case 'start': return t('ai.progress.start');
+    case 'summarize': return part ? t('ai.progress.summarizePart', part) : t('ai.progress.summarize');
+    case 'reduce': return t('ai.progress.reduce');
+    case 'translate-back': return t('ai.progress.translateBack');
+    case 'answer': return t('ai.progress.answer');
+    case 'save': return t('ai.progress.save');
+    default: return t('ai.progress.working');
   }
 }
 
@@ -90,7 +91,7 @@ export async function generateAndSave({ rec, text, segments, lang, existing, pen
     await actions.saveSummary(rec.id, merged, buildMarkdown(rec, merged, transcriptFor(segments, text)));
   } catch (e) {
     console.error('[ai] saving the summary failed', e);
-    const err = new Error(`Could not save the notes: ${e.message}`);
+    const err = new Error(t('ai.saveFailed', { error: e.message }));
     err.friendly = true;
     throw err;
   }
@@ -144,19 +145,18 @@ export function useAiStatus(lang) {
 }
 
 // Notice shown instead of AI features until the model is ready. Renders nothing when ready.
-export function AiGate({ ai, what = 'Meeting notes' }) {
+// what: 'notes' | 'ask' (picks the sentence that names the feature).
+export function AiGate({ ai, what = 'notes' }) {
+  const { t: tr, rich } = useI18n();
   if (!ai || ai.state === 'available') return null;
   if (ai.state === 'checking') {
-    return <p className="ai-note"><ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />Checking on-device AI…</p>;
+    return <p className="ai-note"><ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />{tr('ai.checking')}</p>;
   }
   if (ai.state === 'unsupported') {
     return (
       <div className="rec-banner ai-gate">
         <ExclamationTriangleIcon className="rec-banner-icon" aria-hidden="true" />
-        <span>
-          {what} use Chrome's built-in on-device AI, which this browser doesn't have. Open the app in Chrome 138 or newer
-          on a supported computer. Recording, transcripts and downloads keep working here.
-        </span>
+        <span>{tr(`ai.unsupported.${what}`)}</span>
       </div>
     );
   }
@@ -165,8 +165,7 @@ export function AiGate({ ai, what = 'Meeting notes' }) {
       <div className="rec-banner ai-gate">
         <ExclamationTriangleIcon className="rec-banner-icon" aria-hidden="true" />
         <span>
-          Chrome reports its on-device AI as unavailable on this computer{ai.lang && ai.lang !== 'en' ? ' for this language' : ''}
-          {' '}(it needs enough free disk space, memory and a supported GPU or CPU). Details: chrome://on-device-internals.
+          {rich(ai.lang && ai.lang !== 'en' ? 'ai.unavailableLang' : 'ai.unavailable', { url: <bdi>chrome://on-device-internals</bdi> })}
           {ai.error ? ` ${ai.error}` : ''}
         </span>
       </div>
@@ -177,16 +176,13 @@ export function AiGate({ ai, what = 'Meeting notes' }) {
     <div className="ai-gate ai-enable">
       {ai.state === 'downloading' ? (
         <>
-          <p className="ai-note"><ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />Downloading the on-device AI model{pct != null ? `… ${pct}%` : '…'}</p>
-          <div className="rec-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} aria-label="Model download"><b style={{ width: `${pct || 0}%` }} /></div>
+          <p className="ai-note"><ArrowPathIcon className="ai-note-icon spin" aria-hidden="true" />{pct != null ? tr('ai.downloadingPct', { percent: pct }) : tr('ai.downloading')}</p>
+          <div className="rec-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct || 0} aria-label={tr('ai.downloadAria')}><b style={{ width: `${pct || 0}%` }} /></div>
         </>
       ) : (
         <>
-          <p className="ai-note">
-            {what} are written on this computer by Chrome's built-in AI. Chrome downloads the model once (a few GB);
-            nothing is sent to the cloud.
-          </p>
-          <button type="button" className="primary-btn" onClick={ai.enable}><SparklesIcon aria-hidden="true" className="btn-icon" />Enable on-device AI</button>
+          <p className="ai-note">{tr(`ai.intro.${what}`)}</p>
+          <button type="button" className="primary-btn" onClick={ai.enable}><SparklesIcon aria-hidden="true" className="btn-icon" />{tr('ai.enable')}</button>
         </>
       )}
       {ai.error && <p className="rec-error">{ai.error}</p>}

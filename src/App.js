@@ -6,6 +6,7 @@ import Recordings from './Recordings';
 import useRecordings from './useRecordings';
 import useAutoSummarize from './useAutoSummarize';
 import { API } from './api';
+import { useI18n, t as tNow } from './i18n';
 import {
   ArrowUpTrayIcon,
   MusicalNoteIcon,
@@ -17,16 +18,22 @@ import {
 } from '@heroicons/react/24/outline';
 
 const TABS = [
-  { id: 'record', label: 'Record' },
-  { id: 'recordings', label: 'Recordings' },
-  { id: 'file', label: 'Transcribe a file' },
+  { id: 'record', labelKey: 'tabs.record' },
+  { id: 'recordings', labelKey: 'tabs.recordings' },
+  { id: 'file', labelKey: 'tabs.file' },
 ];
+// The language switch shows the other language in its own name.
+const OTHER_LANG = {
+  en: { code: 'he', name: 'עברית' },
+  he: { code: 'en', name: 'English' },
+};
 
 function App() {
+  const { t, rich, lang, setLang, dir } = useI18n();
   const [tab, setTab] = useState(() => {
     let saved = null;
     try { saved = localStorage.getItem('app.tab'); } catch { /* storage unavailable */ }
-    return TABS.some((t) => t.id === saved) ? saved : 'record';
+    return TABS.some((x) => x.id === saved) ? saved : 'record';
   });
   useEffect(() => {
     try { localStorage.setItem('app.tab', tab); } catch { /* storage unavailable */ }
@@ -75,14 +82,14 @@ function App() {
       console.log('[↓] Received update:', data);
       
       if (data.type === 'status' || data.type === 'info') {
-        const msg = data.message || (data.total_chunks ? `Processing ${data.total_chunks} chunks...` : 'Processing...');
+        const msg = data.message || (data.total_chunks ? tNow('file.processingChunks', { n: data.total_chunks }) : tNow('file.processing'));
         setProgressMessage(msg);
         console.log('Status:', msg);
       } else if (data.type === 'progress') {
         setProgress(data.percent);
         const label = data.total_chunks && data.total_chunks > 0
-          ? `Processing chunk ${data.chunk}/${data.total_chunks}`
-          : `Transcribing... ${data.percent}%`;
+          ? tNow('file.chunk', { chunk: data.chunk, total: data.total_chunks })
+          : tNow('file.transcribingPct', { percent: data.percent });
         setProgressMessage(label);
         console.log(`Progress: ${data.percent}%`);
       } else if (data.type === 'segment') {
@@ -111,7 +118,7 @@ function App() {
         setTranscription(data.text);
         setLoading(false);
         setProgress(100);
-        setProgressMessage('[✓] Complete!');
+        setProgressMessage(tNow('file.complete'));
       } else if (data.type === 'error') {
         setError(data.error || data.message);
         setLoading(false);
@@ -130,7 +137,7 @@ function App() {
     const onCancelled = (data) => {
       console.log('[!] Transcription cancelled');
       setLoading(false);
-      setError(data.message || 'Transcription cancelled by user');
+      setError(data.message || tNow('file.cancelledByUser'));
       setProgress(0);
       setStreamingSegments([]);
     };
@@ -169,10 +176,13 @@ function App() {
   }, []);
 
   const onTabKey = (e) => {
-    const i = TABS.findIndex((t) => t.id === tab);
+    const i = TABS.findIndex((x) => x.id === tab);
+    // Arrows follow the visual order, which is mirrored in RTL.
+    const fwd = dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
+    const back = dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
     let n;
-    if (e.key === 'ArrowRight') n = (i + 1) % TABS.length;
-    else if (e.key === 'ArrowLeft') n = (i - 1 + TABS.length) % TABS.length;
+    if (e.key === fwd) n = (i + 1) % TABS.length;
+    else if (e.key === back) n = (i - 1 + TABS.length) % TABS.length;
     else if (e.key === 'Home') n = 0;
     else if (e.key === 'End') n = TABS.length - 1;
     else return;
@@ -196,7 +206,7 @@ function App() {
       setLoading(false);
       setProgress(0);
       setProgressMessage('');
-      setError('Transcription cancelled');
+      setError(t('file.cancelled'));
     }
   };
 
@@ -246,7 +256,7 @@ function App() {
       setError('');
       setTranscription('');
     } else {
-      setError('Please drop a valid M4A, MP4, or OGG file');
+      setError(t('file.invalidDrop'));
     }
   };
 
@@ -261,7 +271,7 @@ function App() {
 
   const handleTranscribe = async () => {
     if (!file) {
-      setError('Please select a file first');
+      setError(t('file.selectFirst'));
       return;
     }
 
@@ -270,7 +280,7 @@ function App() {
     setTranscription('');
     setProgress(0);
     setStreamingSegments([]);
-    setProgressMessage('Connecting to server...');
+    setProgressMessage(t('file.connecting'));
 
     try {
       const formData = new FormData();
@@ -278,7 +288,7 @@ function App() {
       formData.append('model', selectedModel);
       formData.append('clientId', clientIdRef.current);
 
-      setProgressMessage('Uploading file...');
+      setProgressMessage(t('file.uploading'));
 
       // Call local Whisper server with streaming support
       const response = await axios.post(
@@ -292,9 +302,9 @@ function App() {
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             if (percentCompleted < 100) {
-              setProgressMessage(`Uploading: ${percentCompleted}%`);
+              setProgressMessage(tNow('file.uploadingPct', { percent: percentCompleted }));
             } else {
-              setProgressMessage('Processing - this may take several minutes for large models...');
+              setProgressMessage(tNow('file.processingLong'));
             }
           },
         }
@@ -312,13 +322,13 @@ function App() {
       // Check if it's a timeout error
       if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
         console.log('[⏱] Timeout detected, progress saved. You can re-upload the same file to resume.');
-        setError('Processing timeout - Progress saved! Re-upload the same file to resume from checkpoint.');
-        setProgressMessage('Timeout - progress saved in checkpoint');
+        setError(tNow('file.timeoutError'));
+        setProgressMessage(tNow('file.timeoutProgress'));
       } else {
         const errorMsg = err.response?.data?.error 
           || err.response?.data?.details
           || err.message 
-          || 'Failed to transcribe audio. Make sure the server is running.';
+          || tNow('file.failed');
         setError(errorMsg);
         setProgressMessage('');
       }
@@ -341,12 +351,12 @@ function App() {
   };
 
   const modelOptions = [
-    { value: 'tiny', label: 'Fastest', desc: '~1-3 min' },
-    { value: 'base', label: 'Balanced', desc: '~3-8 min' },
-    { value: 'small', label: 'More accurate', desc: '~5-12 min' },
-    { value: 'medium', label: 'Most accurate (slow)', desc: '~10-20 min' },
-    { value: 'large-v3-turbo', label: 'Turbo (fast + best)', desc: '~5-10 min' },
-    { value: 'large-v3', label: 'Large (best, slow)', desc: '~20-40 min' },
+    { value: 'tiny', range: '1-3' },
+    { value: 'base', range: '3-8' },
+    { value: 'small', range: '5-12' },
+    { value: 'medium', range: '10-20' },
+    { value: 'large-v3-turbo', range: '5-10' },
+    { value: 'large-v3', range: '20-40' },
   ];
 
   const copyToClipboard = () => {
@@ -365,24 +375,33 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const other = OTHER_LANG[lang] || OTHER_LANG.en;
+  const pillText = health.ok === false ? t('header.serverOffline') : health.ok ? t(health.gpu ? 'header.readyGpu' : 'header.ready') : t('header.connecting');
+
   return (
     <div className="App">
-      <div className={`container ${tab === 'recordings' ? 'wide' : ''}`}>
+      <div className="container">
         <header className="header">
-          <h1>Meeting Transcriber</h1>
-          <span className={`status-pill ${health.ok === false ? 'down' : health.ok ? 'up' : 'wait'}`} role="status">
-            <span className="status-dot" aria-hidden="true" />
-            {health.ok === false ? 'Server offline' : health.ok ? `Ready${health.gpu ? ' · GPU' : ''}` : 'Connecting…'}
-          </span>
-        </header>
+          <h1>{t('header.title')}</h1>
 
-        <div className="tabs" role="tablist" aria-label="Mode">
-          {TABS.map((t) => (
-            <button key={t.id} type="button" role="tab" id={`tab-${t.id}`} aria-selected={tab === t.id} aria-controls={`panel-${t.id}`} tabIndex={tab === t.id ? 0 : -1} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)} onKeyDown={onTabKey}>
-              {t.label}
+          <div className="tabs" role="tablist" aria-label={t('tabs.label')}>
+            {TABS.map((x) => (
+              <button key={x.id} type="button" role="tab" id={`tab-${x.id}`} aria-selected={tab === x.id} aria-controls={`panel-${x.id}`} tabIndex={tab === x.id ? 0 : -1} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)} onKeyDown={onTabKey}>
+                {t(x.labelKey)}
+              </button>
+            ))}
+          </div>
+
+          <div className="header-end">
+            <span className={`status-pill ${health.ok === false ? 'down' : health.ok ? 'up' : 'wait'}`} role="status">
+              <span className="status-dot" aria-hidden="true" />
+              {pillText}
+            </span>
+            <button type="button" className="lang-btn" aria-label={t('header.switchLang')} title={t('header.switchLang')} onClick={() => setLang(other.code)}>
+              <span lang={other.code}>{other.name}</span>
             </button>
-          ))}
-        </div>
+          </div>
+        </header>
 
         {/* All panels stay mounted (hidden when inactive) so a recording in progress survives tab switches. */}
         <div role="tabpanel" id="panel-record" aria-labelledby="tab-record" className="tab-panel" hidden={tab !== 'record'}>
@@ -410,13 +429,14 @@ function App() {
         </div>
 
         <div role="tabpanel" id="panel-file" aria-labelledby="tab-file" className="tab-panel" hidden={tab !== 'file'}>
+        <div className="file-col">
 
         {!file && (
           <div className="field model-field">
-            <label htmlFor="file-accuracy">Accuracy</label>
+            <label htmlFor="file-accuracy">{t('file.accuracy')}</label>
             <select id="file-accuracy" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
               {modelOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label} ({option.desc})</option>
+                <option key={option.value} value={option.value}>{t('model.withTime', { label: t(`model.${option.value}`), range: option.range })}</option>
               ))}
             </select>
           </div>
@@ -435,24 +455,25 @@ function App() {
             onChange={handleFileInput}
             accept=".m4a,.mp4,.ogg,.oga,.opus,audio/m4a,audio/x-m4a,audio/mp4,video/mp4,audio/ogg,video/ogg,application/ogg"
             className="visually-hidden"
-            aria-label="Choose an audio file"
+            aria-label={t('file.chooseAria')}
           />
 
           {!file ? (
             <>
               <div className="upload-icon"><ArrowUpTrayIcon aria-hidden="true" /></div>
               <p className="dropzone-text">
-                Drop an audio file here or{' '}
-                <button type="button" className="link-btn" onClick={() => fileInputRef.current?.click()}>choose a file</button>
+                {rich('file.dropText', {
+                  choose: <button type="button" className="link-btn" onClick={() => fileInputRef.current?.click()}>{t('file.chooseFile')}</button>,
+                })}
               </p>
-              <p className="dropzone-subtext">M4A, MP4, OGG, OGA or OPUS</p>
+              <p className="dropzone-subtext">{t('file.types')}</p>
             </>
           ) : (
             <>
               <div className="file-icon"><MusicalNoteIcon aria-hidden="true" /></div>
               <p className="file-name" dir="auto">{file.name}</p>
-              <p className="file-size">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
-              <button type="button" className="icon-btn clear-btn" aria-label="Remove file" title="Remove file" onClick={handleClearFile}>
+              <p className="file-size">{rich('file.sizeMb', { size: <bdi>{(file.size / (1024 * 1024)).toFixed(2)}</bdi> })}</p>
+              <button type="button" className="icon-btn clear-btn" aria-label={t('file.remove')} title={t('file.remove')} onClick={handleClearFile}>
                 <XMarkIcon aria-hidden="true" />
               </button>
             </>
@@ -469,11 +490,11 @@ function App() {
           <>
             {!loading ? (
               <button type="button" className="primary-btn big" onClick={handleTranscribe}>
-                Transcribe file
+                {t('file.transcribe')}
               </button>
             ) : (
               <button type="button" className="ghost-btn danger big" onClick={handleCancelTranscription}>
-                <StopIcon aria-hidden="true" /> Stop transcription
+                <StopIcon aria-hidden="true" /> {t('file.stop')}
               </button>
             )}
 
@@ -483,7 +504,7 @@ function App() {
                   <div className="progress-bar" style={{ width: `${progress}%` }}></div>
                 </div>
                 <div className="progress-info">
-                  <span className="progress-percent">{progress}%</span>
+                  <span className="progress-percent" dir="ltr">{progress}%</span>
                   <span className="progress-message">{progressMessage}</span>
                 </div>
               </div>
@@ -494,8 +515,8 @@ function App() {
         {streamingSegments.length > 0 && !transcription && (
           <div className="streaming-box" ref={transcriptionBoxRef}>
             <div className="streaming-header">
-              <h3>Live transcript</h3>
-              <span className="live-badge"><span className="live-dot" aria-hidden="true">●</span> Live</span>
+              <h3>{t('file.liveTitle')}</h3>
+              <span className="live-badge"><span className="live-dot" aria-hidden="true">●</span> {t('file.live')}</span>
             </div>
             <div className="streaming-content" dir="auto">
               {streamingSegments.map((segment, index) => (
@@ -514,22 +535,23 @@ function App() {
         {transcription && (
           <div className="transcription-result rec-item">
             <div className="result-header">
-              <h2>Transcript</h2>
+              <h2>{t('file.resultTitle')}</h2>
             </div>
             <div className="transcription-text" dir="auto">
               {transcription}
             </div>
             <div className="rec-actions">
-              <button type="button" className="primary-btn" onClick={copyToClipboard}>{copied ? 'Copied ✓' : 'Copy text'}</button>
-              <button type="button" className="ghost-btn" onClick={downloadTxt}><ArrowDownTrayIcon aria-hidden="true" />Download .txt</button>
-              <button type="button" className="ghost-btn" onClick={handleClearFile}><ArrowPathIcon aria-hidden="true" />Transcribe another file</button>
+              <button type="button" className="primary-btn" onClick={copyToClipboard}>{copied ? t('common.copied') : t('common.copyText')}</button>
+              <button type="button" className="ghost-btn" onClick={downloadTxt}><ArrowDownTrayIcon aria-hidden="true" />{t('file.download')}</button>
+              <button type="button" className="ghost-btn" onClick={handleClearFile}><ArrowPathIcon aria-hidden="true" />{t('file.another')}</button>
             </div>
           </div>
         )}
 
         {!file && !transcription && (
-          <p className="info-footer">Private and free. Runs locally on this computer.</p>
+          <p className="info-footer">{t('file.footer')}</p>
         )}
+        </div>
         </div>
       </div>
     </div>

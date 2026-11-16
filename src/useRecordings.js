@@ -2,14 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
 import { API } from './api';
+import { getLang, t } from './i18n';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (used by Recorder and Recordings)
 // ---------------------------------------------------------------------------
+// Labels follow the UI language (read at render time).
 export const LANGUAGES = [
-  { value: 'he', label: 'Hebrew' },
-  { value: 'en', label: 'English' },
-  { value: 'auto', label: 'Auto-detect' },
+  { value: 'he', get label() { return t('lang.he'); } },
+  { value: 'en', get label() { return t('lang.en'); } },
+  { value: 'auto', get label() { return t('lang.auto'); } },
 ];
 export const langName = (code) => (LANGUAGES.find((l) => l.value === code)?.label) || null;
 
@@ -20,7 +22,19 @@ export function fmtDuration(ms) {
   const h = Math.floor(t / 3600);
   return `${h ? h + ':' : ''}${pad(Math.floor(t / 60) % 60)}:${pad(t % 60)}`;
 }
-export const fmtDate = (ts) => new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const DATE_OPTS = { dateStyle: 'medium', timeStyle: 'short' };
+const uiLocale = () => (getLang() === 'he' ? 'he-IL' : 'en-US');
+export const fmtDate = (ts) => new Date(ts).toLocaleString(uiLocale(), DATE_OPTS);
+// List rows: drop the year when it's the current one ("Nov 14, 3:02 PM").
+export const fmtShortDate = (ts) => {
+  const d = new Date(ts);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString(uiLocale(), {
+    month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+};
+// Default recording names ("Meeting <date>") keep the browser-locale date they always had.
+export const fmtDateForName = (ts) => new Date(ts).toLocaleString(undefined, DATE_OPTS);
 
 export async function api(path, opts = {}) {
   const res = await fetch(API + path, opts);

@@ -7,16 +7,11 @@ import {
 import './Recorder.css';
 
 import { API } from './api';
-import { LANGUAGES, api, fmtDate, fmtDuration } from './useRecordings';
+import { useI18n } from './i18n';
+import { LANGUAGES, api, fmtDateForName, fmtDuration } from './useRecordings';
 
-const MODELS = [
-  { value: 'tiny', label: 'Fastest' },
-  { value: 'base', label: 'Balanced' },
-  { value: 'small', label: 'More accurate' },
-  { value: 'medium', label: 'Most accurate (slow)' },
-  { value: 'large-v3-turbo', label: 'Turbo (fast + best)' },
-  { value: 'large-v3', label: 'Large (best, slow)' },
-];
+// Labels are the locale keys `model.<value>`.
+const MODELS = ['tiny', 'base', 'small', 'medium', 'large-v3-turbo', 'large-v3'];
 
 // ---------------------------------------------------------------------------
 // IndexedDB crash buffer. Every second of audio is written here while
@@ -71,9 +66,10 @@ const sessionLock = (id) => `meeting-recorder-session-${id}`;
 // component
 // ---------------------------------------------------------------------------
 export default function Recorder({ active = true, serverDown, refresh, transcribe: startTranscription, onOpenRecording, onLiveChange }) {
+  const { t, rich } = useI18n();
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [status, setStatus] = useState({ text: 'Ready', error: false });
+  const [status, setStatus] = useState({ key: 'rec.status.ready', vars: null, error: false });
   const [useMic, setUseMic] = useState(load('rec.useMic', '1') === '1');
   const [micId, setMicId] = useState(load('rec.micId', ''));
   const [mics, setMics] = useState([]);
@@ -96,14 +92,15 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
   useEffect(() => save('rec.source', source), [source]);
   useEffect(() => save('rec.auto', autoTranscribe ? '1' : '0'), [autoTranscribe]);
 
-  const say = (text, error = false) => setStatus({ text, error });
+  // Statuses are kept as locale keys so they follow a language switch.
+  const say = (key, error = false, vars = null) => setStatus({ key, vars, error });
 
   const transcribe = useCallback(async (id) => {
     const { model: m, language: l } = settingsRef.current;
     try {
       await startTranscription(id, { model: m, language: l });
     } catch (e) {
-      say(`Could not start transcription: ${e.message}`, true);
+      say('rec.status.transcribeFailed', true, { error: e.message });
     }
   }, [startTranscription]);
 
@@ -127,7 +124,7 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
         form.append('file', blob, `recording.${blob.type.includes('ogg') ? 'ogg' : 'webm'}`);
         form.append('created', String(s.id));
         form.append('duration', String(s.duration || parts.length * 1000));
-        form.append('name', `${recovered ? 'Recovered' : 'Meeting'} ${fmtDate(s.id)}`);
+        form.append('name', `${recovered ? 'Recovered' : 'Meeting'} ${fmtDateForName(s.id)}`);
         const meta = await api('/api/recordings', { method: 'POST', body: form });
         await dropSession(s.id);
         uploaded.push({ session: s.id, id: meta.id });
@@ -142,8 +139,8 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
   // (The recordings list and live updates come from useRecordings.)
   useEffect(() => {
     flushPending()
-      .then(({ length: n }) => { if (n) { say(`Uploaded ${n} unsaved recording${n > 1 ? 's' : ''} from last time.`); refresh(); } })
-      .catch(() => say('Server offline — unsaved recordings stay in this browser until it is back.', true));
+      .then(({ length: n }) => { if (n) { say('rec.status.uploadedPending', false, { count: n }); refresh(); } })
+      .catch(() => say('rec.status.serverOffline', true));
   }, [refresh, flushPending]);
 
   const loadMics = useCallback(async () => {
@@ -158,7 +155,7 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
   async function start() {
     if (recRef.current) return;
     setSavedId(null);
-    say('Choose what to share…');
+    say('rec.status.choose');
     let display;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
@@ -168,13 +165,13 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
         selfBrowserSurface: 'exclude',
       });
     } catch {
-      say('Cancelled');
+      say('rec.status.cancelled');
       return;
     }
     const sysTrack = display.getAudioTracks()[0];
     if (!sysTrack) {
       display.getTracks().forEach((t) => t.stop());
-      say('No audio was shared. Pick "Entire screen" and tick "Share system audio" (or a tab + "Share tab audio").', true);
+      say('rec.status.noAudio', true);
       return;
     }
 
@@ -186,7 +183,7 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
         });
         loadMics();
       } catch {
-        say('Mic unavailable — recording meeting audio only.', true);
+        say('rec.status.micUnavailable', true);
       }
     }
 
@@ -246,7 +243,7 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
     }
 
     setRecording(true);
-    say('Recording…');
+    say('rec.status.recording');
     rec.timer = setInterval(() => setElapsed(performance.now() - rec.startedAt), 250);
     const loop = () => {
       meters.forEach((m) => m());
@@ -258,7 +255,7 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
   function stop() {
     const rec = recRef.current;
     if (!rec || rec.mr.state === 'inactive') return;
-    say('Saving…');
+    say('rec.status.saving');
     rec.mr.stop();
   }
 
@@ -281,9 +278,9 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
       const uploaded = await flushPending();
       await refresh();
       setSavedId(uploaded.find((u) => u.session === rec.id)?.id ?? null);
-      say(`Saved · ${fmtDuration(duration)}${settingsRef.current.autoTranscribe ? ' · transcribing in Recordings' : ''}`);
+      say(settingsRef.current.autoTranscribe ? 'rec.status.savedTranscribing' : 'rec.status.saved', false, { duration: fmtDuration(duration) });
     } catch (e) {
-      say(`Recording kept in this browser — upload failed (${e.message}). It will upload automatically when the server is running.`, true);
+      say('rec.status.uploadFailed', true, { error: e.message });
     }
   }
 
@@ -300,12 +297,13 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
     return () => { window.removeEventListener('beforeunload', warn); window.removeEventListener('keydown', key); };
   });
 
-  const saving = status.text === 'Saving…';
-  const micLabel = !useMic ? 'Off' : (mics.find((m) => m.deviceId === micId)?.label || 'Default');
-  const modelLabel = MODELS.find((m) => m.value === model)?.label || model;
+  const saving = status.key === 'rec.status.saving';
+  const micLabel = !useMic ? t('rec.settings.micOff') : (mics.find((m) => m.deviceId === micId)?.label || t('rec.settings.micDefault'));
+  const modelLabel = MODELS.includes(model) ? t(`model.${model}`) : model;
   const langLabel = LANGUAGES.find((l) => l.value === language)?.label || language;
   const btnState = saving ? 'saving' : recording ? 'on' : 'idle';
-  const btnLabel = saving ? 'Saving…' : recording ? 'Stop and save' : 'Start recording';
+  const btnLabel = t(saving ? 'rec.btn.saving' : recording ? 'rec.btn.stop' : 'rec.btn.start');
+  const idle = status.key === 'rec.status.ready';
 
   const live = saving ? 'uploading' : recording ? 'recording' : null;
   useEffect(() => { if (onLiveChange) onLiveChange(live); }, [live, onLiveChange]);
@@ -325,30 +323,27 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
   return (
     <div className="recorder">
       <div className={`rec-panel ${recording ? 'is-recording' : ''}`}>
-        <div className="rec-source">
-          <span className="rec-source-title" id="rec-source-title">What are you recording?</span>
-          <div className="rec-seg" role="radiogroup" aria-labelledby="rec-source-title">
-            {[
-              { v: 'desktop', t: 'Desktop app', s: 'Zoom, Teams' },
-              { v: 'tab', t: 'Browser tab', s: 'Google Meet' },
-            ].map((o) => (
-              <button
-                key={o.v}
-                type="button"
-                role="radio"
-                aria-checked={source === o.v}
-                tabIndex={source === o.v ? 0 : -1}
-                data-source={o.v}
-                disabled={recording}
-                className={`rec-seg-btn ${source === o.v ? 'active' : ''}`}
-                onClick={() => setSource(o.v)}
-                onKeyDown={onKeySource}
-              >
-                <span className="seg-main">{o.t}</span>
-                <span className="seg-sub">{o.s}</span>
-              </button>
-            ))}
-          </div>
+        <div className="rec-seg" role="radiogroup" aria-label={t('rec.source.label')}>
+          {[
+            { v: 'desktop', main: 'rec.source.desktop', sub: 'rec.source.desktopSub' },
+            { v: 'tab', main: 'rec.source.tab', sub: 'rec.source.tabSub' },
+          ].map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              role="radio"
+              aria-checked={source === o.v}
+              tabIndex={source === o.v ? 0 : -1}
+              data-source={o.v}
+              disabled={recording}
+              className={`rec-seg-btn ${source === o.v ? 'active' : ''}`}
+              onClick={() => setSource(o.v)}
+              onKeyDown={onKeySource}
+            >
+              <span className="seg-main">{t(o.main)}</span>
+              <span className="seg-sub">{t(o.sub)}</span>
+            </button>
+          ))}
         </div>
 
         <div className="rec-main">
@@ -359,72 +354,72 @@ export default function Recorder({ active = true, serverDown, refresh, transcrib
               onClick={() => (recording ? stop() : start())}
               disabled={btnState === 'saving'}
               aria-labelledby="rec-button-label"
-              title="Start / stop (Space)"
+              title={t('rec.btn.title')}
             >
               {btnState === 'saving' ? <span className="spinner" aria-hidden="true" /> : recording ? <StopIcon aria-hidden="true" /> : <span className="rec-dot" aria-hidden="true" />}
             </button>
           </div>
           <span className="rec-button-label" id="rec-button-label">{btnLabel}</span>
-          {recording && <div className="rec-timer" aria-hidden="true">{fmtDuration(elapsed)}</div>}
+          {recording && <div className="rec-timer" aria-hidden="true" dir="ltr">{fmtDuration(elapsed)}</div>}
         </div>
 
         {!recording && (
-          <p className="rec-hint">
-            {source === 'desktop'
-              ? <>Chrome will ask what to share — pick <b>Entire screen</b> and turn on <b>Share system audio</b>.</>
-              : <>Chrome will ask what to share — pick the <b>meeting tab</b> and turn on <b>Share tab audio</b>.</>}
-          </p>
+          <p className="rec-hint">{rich(source === 'desktop' ? 'rec.hint.desktop' : 'rec.hint.tab')}</p>
         )}
 
-        <div className="rec-meters">
-          <div className="rec-meter"><span>Meeting audio</span><div className="rec-bar"><b ref={sysBar} /></div></div>
-          <div className="rec-meter"><span>Your mic</span><div className="rec-bar"><b ref={micBar} /></div></div>
-        </div>
+        {recording && (
+          <div className="rec-meters">
+            <div className="rec-meter"><span>{t('rec.meter.system')}</span><div className="rec-bar"><b ref={sysBar} /></div></div>
+            <div className="rec-meter"><span>{t('rec.meter.mic')}</span><div className="rec-bar"><b ref={micBar} /></div></div>
+          </div>
+        )}
 
+        {/* The idle "Ready" status is not shown (the header pill already shows the server state). */}
         <div className={`rec-status ${status.error ? 'err' : ''}`} role="status" aria-live="polite">
-          {status.error && <ExclamationCircleIcon className="rec-status-icon" aria-hidden="true" />}
-          <span>{status.text}</span>
+          {!idle && status.error && <ExclamationCircleIcon className="rec-status-icon" aria-hidden="true" />}
+          {!idle && <span>{t(status.key, status.vars)}</span>}
         </div>
         {savedId && !status.error && onOpenRecording && (
-          <button type="button" className="ghost-btn small" onClick={() => onOpenRecording(savedId)}>View in Recordings</button>
+          <button type="button" className="ghost-btn small" onClick={() => onOpenRecording(savedId)}>{t('rec.viewInRecordings')}</button>
         )}
       </div>
 
       {serverDown && (
         <div className="rec-banner">
           <ExclamationTriangleIcon className="rec-banner-icon" aria-hidden="true" />
-          <span>Server offline. Recording still works; uploads and transcripts resume when it's back.</span>
+          <span>{t('rec.serverDown')}</span>
         </div>
       )}
 
       <details className="rec-settings">
-        <summary>Settings · Mic: {micLabel} · {langLabel} · {modelLabel}</summary>
+        {/* One span: summary is a flex box, and bare text pieces would lose their edge spaces. */}
+        <summary><span>{rich('rec.settings.summary', { mic: <bdi>{micLabel}</bdi>, lang: langLabel, model: <bdi>{modelLabel}</bdi> })}</span></summary>
         <div className="rec-fields">
           <div className="field field-toggle">
             <input id="set-usemic" type="checkbox" role="switch" className="toggle" checked={useMic} disabled={recording} onChange={(e) => setUseMic(e.target.checked)} />
-            <label htmlFor="set-usemic">Record my microphone</label>
+            <label htmlFor="set-usemic">{t('rec.settings.useMic')}</label>
           </div>
           <div className="field">
-            <label htmlFor="set-mic">Microphone</label>
+            <label htmlFor="set-mic">{t('rec.settings.mic')}</label>
             <select id="set-mic" value={micId} disabled={recording || !useMic} onChange={(e) => setMicId(e.target.value)}>
-              <option value="">Default</option>
-              {mics.map((m, i) => <option key={m.deviceId} value={m.deviceId}>{m.label || `Mic ${i + 1}`}</option>)}
+              <option value="">{t('rec.settings.micDefault')}</option>
+              {mics.map((m, i) => <option key={m.deviceId} value={m.deviceId}>{m.label || t('rec.settings.micN', { n: i + 1 })}</option>)}
             </select>
           </div>
           <div className="field field-toggle">
             <input id="set-auto" type="checkbox" role="switch" className="toggle" checked={autoTranscribe} onChange={(e) => setAutoTranscribe(e.target.checked)} />
-            <label htmlFor="set-auto">Transcribe automatically when I stop</label>
+            <label htmlFor="set-auto">{t('rec.settings.auto')}</label>
           </div>
           <div className="field">
-            <label htmlFor="set-lang">Language</label>
+            <label htmlFor="set-lang">{t('rec.settings.language')}</label>
             <select id="set-lang" value={language} onChange={(e) => setLanguage(e.target.value)}>
               {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </div>
           <div className="field">
-            <label htmlFor="set-model">Accuracy</label>
+            <label htmlFor="set-model">{t('rec.settings.accuracy')}</label>
             <select id="set-model" value={model} onChange={(e) => setModel(e.target.value)}>
-              {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              {MODELS.map((m) => <option key={m} value={m}>{t(`model.${m}`)}</option>)}
             </select>
           </div>
         </div>
